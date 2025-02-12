@@ -1,71 +1,12 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "C:\\Users\\David\\Documents\\GitHub\\Poker\\Poker\\",
-  "Documents": [
-    {
-      "AbsoluteMoniker": "D:0:0:{91A0337D-4F1E-4547-8A67-B6694EB99CAB}|Poker.csproj|c:\\users\\david\\documents\\github\\poker\\poker\\client\\client.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{91A0337D-4F1E-4547-8A67-B6694EB99CAB}|Poker.csproj|solutionrelative:client\\client.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{91A0337D-4F1E-4547-8A67-B6694EB99CAB}|Poker.csproj|c:\\users\\david\\documents\\github\\poker\\poker\\server\\server.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{91A0337D-4F1E-4547-8A67-B6694EB99CAB}|Poker.csproj|solutionrelative:server\\server.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{91A0337D-4F1E-4547-8A67-B6694EB99CAB}|Poker.csproj|c:\\users\\david\\documents\\github\\poker\\poker\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{91A0337D-4F1E-4547-8A67-B6694EB99CAB}|Poker.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    }
-  ],
+  "Documents": [],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
       "VerticalTabListWidth": 256,
-      "DocumentGroups": [
-        {
-          "DockedWidth": 200,
-          "SelectedChildIndex": 0,
-          "Children": [
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "Client.cs",
-              "DocumentMoniker": "C:\\Users\\David\\Documents\\GitHub\\Poker\\Poker\\Client\\Client.cs",
-              "RelativeDocumentMoniker": "Client\\Client.cs",
-              "ToolTip": "C:\\Users\\David\\Documents\\GitHub\\Poker\\Poker\\Client\\Client.cs",
-              "RelativeToolTip": "Client\\Client.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-12T18:42:43.019Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "Server.cs",
-              "DocumentMoniker": "C:\\Users\\David\\Documents\\GitHub\\Poker\\Poker\\Server\\Server.cs",
-              "RelativeDocumentMoniker": "Server\\Server.cs",
-              "ToolTip": "C:\\Users\\David\\Documents\\GitHub\\Poker\\Poker\\Server\\Server.cs",
-              "RelativeToolTip": "Server\\Server.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-12T18:42:29.765Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "Program.cs",
-              "DocumentMoniker": "C:\\Users\\David\\Documents\\GitHub\\Poker\\Poker\\Program.cs",
-              "RelativeDocumentMoniker": "Program.cs",
-              "ToolTip": "C:\\Users\\David\\Documents\\GitHub\\Poker\\Poker\\Program.cs",
-              "RelativeToolTip": "Program.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-12T18:31:43.366Z",
-              "EditorCaption": ""
-            }
-          ]
-        }
-      ]
+      "DocumentGroups": []
     }
   ]
 }

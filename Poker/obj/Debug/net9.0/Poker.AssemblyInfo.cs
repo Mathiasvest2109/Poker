@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Poker")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e95ab89c57d7d9790fb74297165ab75ca7d64234")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2c03bd9abe4a0d47fef0ad463b395cd1ebcb0256")]
 [assembly: System.Reflection.AssemblyProductAttribute("Poker")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Poker")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
