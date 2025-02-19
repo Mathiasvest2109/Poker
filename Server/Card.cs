@@ -4,14 +4,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Poker
+namespace Server
 {
     internal class Card
     {
         protected String value;
         protected String suit;
 
-        protected Card() {
+        protected Card()
+        {
             value = "empty";
             suit = "empty";
         }
