@@ -8,5 +8,6 @@ namespace Poker.Client
 {
     internal class Client
     {
+
     }
 }
