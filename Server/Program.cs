@@ -1,115 +1,115 @@
-﻿// See https://aka.ms/new-console-template for more information
-using System.Collections.Concurrent;
-using System.Net.Sockets;
-using System.Net;
-using System.Text;
+﻿    // See https://aka.ms/new-console-template for more information
+    using System.Collections.Concurrent;
+    using System.Net.Sockets;
+    using System.Net;
+    using System.Text;
 
-internal class RoomServer
-{
-    private static TcpListener? server;
-    private static readonly int PORT = 5000;
-
-    // Dictionary of rooms (Room ID → List of player connections)
-    private static ConcurrentDictionary<string, List<TcpClient>> rooms = new();
-
-    static async Task Main()
+    internal class RoomServer
     {
-        server = new TcpListener(IPAddress.Any, PORT);
-        server.Start();
-        Console.WriteLine($"Server started on port {PORT}");
+        private static TcpListener? server;
+        private static readonly int PORT = 5000;
 
-        while (true)
+        // Dictionary of rooms (Room ID → List of player connections)
+        private static ConcurrentDictionary<string, List<TcpClient>> rooms = new();
+
+        static async Task Main()
         {
-            var client = await server.AcceptTcpClientAsync();
-            Console.WriteLine("Client Connected");
+            server = new TcpListener(IPAddress.Any, PORT);
+            server.Start();
+            Console.WriteLine($"Server started on port {PORT}");
 
-            // Assign the player to a room
-            string roomId = AssignPlayerToRoom(client);
-            Console.WriteLine($"Player assigned to Room: {roomId}");
-
-            _ = HandleClientAsync(client, roomId);
-        }
-    }
-
-    // Assign player to a room (creates a new one if needed)
-    private static string AssignPlayerToRoom(TcpClient client)
-    {
-        lock (rooms)
-        {
-            // Try to find a room that is not full
-            foreach (var room in rooms)
-            {
-                if (room.Value.Count < 4)
-                {
-                    room.Value.Add(client);
-                    return room.Key; // Return the existing room ID
-                }
-            }
-
-            // If no available room, create a new one
-            string newRoomId = Guid.NewGuid().ToString().Substring(0, 6);
-            rooms[newRoomId] = new List<TcpClient> { client };
-            return newRoomId;
-        }
-    }
-
-    // Handles client communication
-    private static async Task HandleClientAsync(TcpClient client, string roomId)
-    {
-        NetworkStream stream = client.GetStream();
-        byte[] buffer = new byte[1024];
-
-        try
-        {
             while (true)
             {
-                int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                if (bytesRead == 0) break; // Client disconnected
+                var client = await server.AcceptTcpClientAsync();
+                Console.WriteLine("Client Connected");
 
-                string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine($"Received from Room {roomId}: {message}");
+                // Assign the player to a room
+                string roomId = AssignPlayerToRoom(client);
+                Console.WriteLine($"Player assigned to Room: {roomId}");
 
-                // Broadcast message to all players in the same room
-                await BroadcastToRoom(roomId, message);
+                _ = HandleClientAsync(client, roomId);
             }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Client error: {ex.Message}");
-        }
-        finally
-        {
-            client.Close();
-            RemovePlayerFromRoom(client, roomId);
-        }
-    }
 
-    // Broadcast a message to all players in a room
-    private static async Task BroadcastToRoom(string roomId, string message)
-    {
-        if (rooms.TryGetValue(roomId, out var players))
+        // Assign player to a room (creates a new one if needed)
+        private static string AssignPlayerToRoom(TcpClient client)
         {
-            byte[] buffer = Encoding.UTF8.GetBytes(message);
-            foreach (var player in players)
+            lock (rooms)
             {
-                if (player.Connected)
+                // Try to find a room that is not full
+                foreach (var room in rooms)
                 {
-                    await player.GetStream().WriteAsync(buffer, 0, buffer.Length);
+                    if (room.Value.Count < 4)
+                    {
+                        room.Value.Add(client);
+                        return room.Key; // Return the existing room ID
+                    }
+                }
+
+                // If no available room, create a new one
+                string newRoomId = Guid.NewGuid().ToString().Substring(0, 6);
+                rooms[newRoomId] = new List<TcpClient> { client };
+                return newRoomId;
+            }
+        }
+
+        // Handles client communication
+        private static async Task HandleClientAsync(TcpClient client, string roomId)
+        {
+            NetworkStream stream = client.GetStream();
+            byte[] buffer = new byte[1024];
+
+            try
+            {
+                while (true)
+                {
+                    int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                    if (bytesRead == 0) break; // Client disconnected
+
+                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Console.WriteLine($"Received from Room {roomId}: {message}");
+
+                    // Broadcast message to all players in the same room
+                    await BroadcastToRoom(roomId, message);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Client error: {ex.Message}");
+            }
+            finally
+            {
+                client.Close();
+                RemovePlayerFromRoom(client, roomId);
+            }
+        }
+
+        // Broadcast a message to all players in a room
+        private static async Task BroadcastToRoom(string roomId, string message)
+        {
+            if (rooms.TryGetValue(roomId, out var players))
+            {
+                byte[] buffer = Encoding.UTF8.GetBytes(message);
+                foreach (var player in players)
+                {
+                    if (player.Connected)
+                    {
+                        await player.GetStream().WriteAsync(buffer, 0, buffer.Length);
+                    }
+                }
+            }
+        }
+
+        // Remove player from a room
+        private static void RemovePlayerFromRoom(TcpClient client, string roomId)
+        {
+            if (rooms.TryGetValue(roomId, out var players))
+            {
+                players.Remove(client);
+                if (players.Count == 0)
+                {
+                    rooms.TryRemove(roomId, out _); // Remove empty room
                 }
             }
         }
     }
-
-    // Remove player from a room
-    private static void RemovePlayerFromRoom(TcpClient client, string roomId)
-    {
-        if (rooms.TryGetValue(roomId, out var players))
-        {
-            players.Remove(client);
-            if (players.Count == 0)
-            {
-                rooms.TryRemove(roomId, out _); // Remove empty room
-            }
-        }
-    }
-}
