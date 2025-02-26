@@ -6,14 +6,88 @@ using System.Threading.Tasks;
 
 namespace Server
 {
+    public static class CollectionExtension
+    {
+        private static Random random = new Random();
+        public static type Random<type>(this IList<type> list)
+        {
+            return list[random.Next(list.Count)];
+        }
+    }
     class Gamecontroller
     {
         public Deck deck = new();
+        public Table table = new();
+        public List<player> players = new();
+
+        Gamecontroller(String p1, String p2, String p3, String p4) {
+            players.Add(new player(p1));
+            players.Add(new player(p2));
+            players.Add(new player(p3));
+            players.Add(new player(p4));
+        }
+
+        void Start_round()
+        {
+            foreach (player p in players)
+            {
+                p.hand.card_1 = deck.deck.Random<Card>();
+                p.hand.card_2 = deck.deck.Random<Card>();
+            }
+
+        }
+
+        void flop_round()
+        {
+
+        }
+
+        void turn_round() 
+        {
+
+        }
+
+        void river_round()
+        {
+
+        }
     }
 
-    internal class Servercard : Card
+    internal class player
     {
-        protected internal Servercard(String Value, String Suit) : base()
+        internal String playername;
+        internal int chips_amount;
+        internal Hand hand = new();
+
+        internal player()
+        {
+            playername = "No name";
+            chips_amount = 0;
+        }
+        internal player(String name)
+        {
+            playername = name;
+            chips_amount = 2000;
+        }
+        internal player(String name, int start_chips)
+        {
+            playername = name;
+            chips_amount = start_chips;
+        }
+
+
+    }
+
+    internal class Card
+    {
+        internal String value;
+        internal String suit;
+        internal Card()
+        {
+            value = "empty";
+            suit = "empty";
+        }
+        internal Card(String Value, String Suit)
         {
             value = Value;
             suit = Suit;
@@ -22,16 +96,16 @@ namespace Server
 
     internal class Hand 
     {
-        Card card_1;
-        Card card_2;
+        internal Card card_1;
+        internal Card card_2;
         internal Hand() { }
     }
 
     internal class Table
     {
-        List<Card> flop;
-        Card turn;
-        Card river;
+        internal List<Card> flop = new List<Card>();
+        internal Card turn = new();
+        internal Card river = new();
 
         internal Table() { }
 
@@ -48,9 +122,9 @@ namespace Server
 
     internal class Deck
     {
-        List<Card> deck;
-        List<String> value;
-        List<String> suit;
+        internal List<Card> deck = new();
+        internal List<String> value = new();
+        internal List<String> suit = new();
 
         internal Deck()
         {
@@ -65,7 +139,7 @@ namespace Server
             {
                 foreach (var V in value)
                 {
-                    deck.Add(new Servercard(V, S));
+                    deck.Add(new Card(V, S));
                 }
             }
         }
