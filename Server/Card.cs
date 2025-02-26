@@ -8,10 +8,10 @@ namespace Server
 {
     internal class Card
     {
-        protected String value;
-        protected String suit;
+        internal String value;
+        internal String suit;
 
-        protected Card()
+        internal Card()
         {
             value = "empty";
             suit = "empty";
