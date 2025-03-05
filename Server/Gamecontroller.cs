@@ -83,7 +83,7 @@ namespace Server
             Console.WriteLine(winner);
             table.flop.Clear();
         }
-        public static void Main()
+        /*public static void Main()
         {
             Gamecontroller Game = new("p1","p2","p3","p4");
             Game.Start_round();
@@ -92,7 +92,7 @@ namespace Server
             Game.river_round();
             Game.end_round();
 
-        }
+        }*/
     }
 
     internal class Player

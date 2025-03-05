@@ -19,6 +19,44 @@ internal class RoomClient
 
             NetworkStream stream = client.GetStream();
 
+            // Read the initial prompt from the server
+            byte[] buffer = new byte[1024];
+            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+            string serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            Console.WriteLine(serverMessage);
+
+            // Send choice to the server
+            Console.Write("Enter your choice (1 to create, 2 to join): ");
+            string choice = Console.ReadLine();
+            byte[] choiceBytes = Encoding.UTF8.GetBytes(choice);
+            await stream.WriteAsync(choiceBytes, 0, choiceBytes.Length);
+
+            if (choice == "1")
+            {
+                // Read the room creation response
+                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                Console.WriteLine(serverMessage);
+            }
+            else if (choice == "2")
+            {
+                // Read the room PIN prompt
+                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                Console.WriteLine(serverMessage);
+
+                // Send room PIN to the server
+                Console.Write("Enter room PIN: ");
+                string pin = Console.ReadLine();
+                byte[] pinBytes = Encoding.UTF8.GetBytes(pin);
+                await stream.WriteAsync(pinBytes, 0, pinBytes.Length);
+
+                // Read the room joining response
+                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                Console.WriteLine(serverMessage);
+            }
+
             // Start a task to continuously read messages from the server
             _ = ReceiveMessagesAsync(stream);
 
@@ -26,8 +64,8 @@ internal class RoomClient
             string userInput;
             while ((userInput = Console.ReadLine()) != null)
             {
-                byte[] buffer = Encoding.UTF8.GetBytes(userInput);
-                await stream.WriteAsync(buffer, 0, buffer.Length);
+                byte[] userInputBytes = Encoding.UTF8.GetBytes(userInput);
+                await stream.WriteAsync(userInputBytes, 0, userInputBytes.Length);
             }
         }
         catch (Exception ex)
@@ -40,7 +78,6 @@ internal class RoomClient
         }
     }
 
-    // Method to receive messages from the server
     private static async Task ReceiveMessagesAsync(NetworkStream stream)
     {
         byte[] buffer = new byte[1024];
