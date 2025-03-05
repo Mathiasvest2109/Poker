@@ -101,7 +101,6 @@ namespace Server
         internal String playerhandtype;
         internal int chips_amount;
         internal Hand hand = new();
-
         internal Player()
         {
             playername = "No name";
@@ -117,8 +116,6 @@ namespace Server
             playername = name;
             chips_amount = start_chips;
         }
-
-
     }
 
     internal class Card
@@ -309,9 +306,8 @@ namespace Server
         }
         private static int CompareCardValues(string card1, string card2)
         {
-            string[] cardOrder = {"2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
+            string[] cardOrder = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
             return Array.IndexOf(cardOrder, card1).CompareTo(Array.IndexOf(cardOrder, card2));
         }
     }
-
 }
