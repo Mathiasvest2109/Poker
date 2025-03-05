@@ -4,7 +4,7 @@
     using System.Net;
     using System.Text;
 
-    internal class RoomServer
+   internal class RoomServer
 {
     private static TcpListener? server;
     private static readonly int PORT = 5000;
@@ -12,7 +12,10 @@
     // Dictionary of rooms (Room PIN → List of player connections)
     private static ConcurrentDictionary<string, List<TcpClient>> rooms = new();
 
-    static async Task Main(string[] args)
+    // Dictionary to store nicknames
+    private static ConcurrentDictionary<TcpClient, string> nicknames = new();
+
+    static async Task Main()
     {
         server = new TcpListener(IPAddress.Any, PORT);
         server.Start();
@@ -30,12 +33,25 @@
     private static async Task HandleClientAsync(TcpClient client)
     {
         NetworkStream stream = client.GetStream();
-        byte[] buffer = Encoding.UTF8.GetBytes("Type 1 to create a room, or type 2 to join an existing room.");
+
+        // Prompt for nickname
+        byte[] buffer = Encoding.UTF8.GetBytes("Enter your nickname:");
+        await stream.WriteAsync(buffer, 0, buffer.Length);
+
+        // Read nickname
+        buffer = new byte[1024];
+        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+        string nickname = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+
+        // Store nickname
+        nicknames[client] = nickname;
+
+        // Send room options
+        buffer = Encoding.UTF8.GetBytes("Type 1 to create a room, or type 2 to join an existing room.");
         await stream.WriteAsync(buffer, 0, buffer.Length);
 
         // Read client's choice
-        buffer = new byte[1024];
-        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+        bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
         string choice = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
 
         string roomId;
@@ -119,10 +135,11 @@
                 if (bytesRead == 0) break; // Client disconnected
 
                 string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine($"Received from Room {roomId}: {message}");
+                string fullMessage = $"{nicknames[client]}: {message}";
+                Console.WriteLine($"Received from Room {roomId}: {fullMessage}");
 
                 // Broadcast message to all players in the same room
-                await BroadcastToRoom(roomId, message);
+                await BroadcastToRoom(roomId, fullMessage);
             }
         }
         catch (Exception ex)
@@ -161,5 +178,6 @@
                 rooms.TryRemove(roomId, out _); // Remove empty room
             }
         }
+        nicknames.TryRemove(client, out _); // Remove nickname
     }
 }

@@ -9,93 +9,104 @@ internal class RoomClient
     private static readonly int SERVER_PORT = 5000; // Server port
 
     static async Task Main(string[] args)
+{
+    TcpClient client = new TcpClient();
+
+    try
     {
-        TcpClient client = new TcpClient();
+        await client.ConnectAsync(SERVER_IP, SERVER_PORT);
+        Console.WriteLine("Connected to server");
 
-        try
+        NetworkStream stream = client.GetStream();
+
+        // Read the nickname prompt from the server
+        byte[] buffer = new byte[1024];
+        int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+        string serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+        Console.WriteLine(serverMessage);
+
+        // Send nickname to the server
+        string nickname = Console.ReadLine();
+        byte[] nicknameBytes = Encoding.UTF8.GetBytes(nickname);
+        await stream.WriteAsync(nicknameBytes, 0, nicknameBytes.Length);
+
+        // Read the initial prompt from the server
+        bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+        serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+        Console.WriteLine(serverMessage);
+
+        // Send choice to the server
+        Console.Write("Enter your choice (1 to create, 2 to join): ");
+        string choice = Console.ReadLine();
+        byte[] choiceBytes = Encoding.UTF8.GetBytes(choice);
+        await stream.WriteAsync(choiceBytes, 0, choiceBytes.Length);
+
+        if (choice == "1")
         {
-            await client.ConnectAsync(SERVER_IP, SERVER_PORT);
-            Console.WriteLine("Connected to server");
-
-            NetworkStream stream = client.GetStream();
-
-            // Read the initial prompt from the server
-            byte[] buffer = new byte[1024];
-            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-            string serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            // Read the room creation response
+            bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+            serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            Console.WriteLine(serverMessage);
+        }
+        else if (choice == "2")
+        {
+            // Read the room PIN prompt
+            bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+            serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
             Console.WriteLine(serverMessage);
 
-            // Send choice to the server
-            Console.Write("Enter your choice (1 to create, 2 to join): ");
-            string choice = Console.ReadLine();
-            byte[] choiceBytes = Encoding.UTF8.GetBytes(choice);
-            await stream.WriteAsync(choiceBytes, 0, choiceBytes.Length);
+            // Send room PIN to the server
+            Console.Write("Enter room PIN: ");
+            string pin = Console.ReadLine();
+            byte[] pinBytes = Encoding.UTF8.GetBytes(pin);
+            await stream.WriteAsync(pinBytes, 0, pinBytes.Length);
 
-            if (choice == "1")
-            {
-                // Read the room creation response
-                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine(serverMessage);
-            }
-            else if (choice == "2")
-            {
-                // Read the room PIN prompt
-                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine(serverMessage);
-
-                // Send room PIN to the server
-                Console.Write("Enter room PIN: ");
-                string pin = Console.ReadLine();
-                byte[] pinBytes = Encoding.UTF8.GetBytes(pin);
-                await stream.WriteAsync(pinBytes, 0, pinBytes.Length);
-
-                // Read the room joining response
-                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine(serverMessage);
-            }
-
-            // Start a task to continuously read messages from the server
-            _ = ReceiveMessagesAsync(stream);
-
-            // Read messages from the user and send them to the server
-            string userInput;
-            while ((userInput = Console.ReadLine()) != null)
-            {
-                byte[] userInputBytes = Encoding.UTF8.GetBytes(userInput);
-                await stream.WriteAsync(userInputBytes, 0, userInputBytes.Length);
-            }
+            // Read the room joining response
+            bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+            serverMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            Console.WriteLine(serverMessage);
         }
-        catch (Exception ex)
+
+        // Start a task to continuously read messages from the server
+        _ = ReceiveMessagesAsync(stream);
+
+        // Read messages from the user and send them to the server
+        string userInput;
+        while ((userInput = Console.ReadLine()) != null)
         {
-            Console.WriteLine($"Error: {ex.Message}");
-        }
-        finally
-        {
-            client.Close();
+            byte[] userInputBytes = Encoding.UTF8.GetBytes(userInput);
+            await stream.WriteAsync(userInputBytes, 0, userInputBytes.Length);
         }
     }
-
-    private static async Task ReceiveMessagesAsync(NetworkStream stream)
+    catch (Exception ex)
     {
-        byte[] buffer = new byte[1024];
+        Console.WriteLine($"Error: {ex.Message}");
+    }
+    finally
+    {
+        client.Close();
+    }
+}
 
-        try
-        {
-            while (true)
-            {
-                int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                if (bytesRead == 0) break; // Server disconnected
+private static async Task ReceiveMessagesAsync(NetworkStream stream)
+{
+    byte[] buffer = new byte[1024];
 
-                string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine($"Received: {message}");
-            }
-        }
-        catch (Exception ex)
+    try
+    {
+        while (true)
         {
-            Console.WriteLine($"Error receiving message: {ex.Message}");
+            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+            if (bytesRead == 0) break; // Server disconnected
+
+            string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            Console.WriteLine($"{message}");
         }
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error receiving message: {ex.Message}");
+    }
+}
+
 }
