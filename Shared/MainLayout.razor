@@ -1,0 +1,24 @@
+@using Microsoft.JSInterop
+@inherits LayoutComponentBase
+@inject IJSRuntime JSRuntime
+
+<div class="main-layout">
+    <header>
+        <h1>Poker Game</h1>
+    </header>
+
+    <div class="content">
+        @Body
+    </div>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("startSignalR");
+            Console.WriteLine("[MainLayout.razor] SignalR Initialized from MainLayout!");
+        }
+    }
+}

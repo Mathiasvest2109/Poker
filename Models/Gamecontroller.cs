@@ -6,25 +6,25 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server
+namespace PokerGame.Models
 {
     public static class CollectionExtension
     {
         private static Random random = new Random();
-        public static type Random<type>(this IList<type> list)
+        public static T Random<T>(this IList<T> list)
         {
-            type temp = list[random.Next(list.Count)];
+            T temp = list[random.Next(list.Count)];
             list.Remove(temp);
             return temp;
         }
     }
-    class Gamecontroller
+    public class Gamecontroller
     {
         public Deck deck = new();
         public Table table = new();
         public List<Player> players_round = new();
         public List<Player> players = new();
-        Gamecontroller(String p1, String p2, String p3, String p4) {
+        public Gamecontroller(String p1, String p2, String p3, String p4) {
             players.Add(new Player(p1));
             players.Add(new Player(p2));
             players.Add(new Player(p3));
@@ -95,7 +95,7 @@ namespace Server
         }*/
     }
 
-    internal class Player
+    public class Player
     {
         internal String playername;
         internal String playerhandtype;
@@ -121,7 +121,7 @@ namespace Server
 
     }
 
-    internal class Card
+    public class Card
     {
         internal String value;
         internal String suit;
@@ -137,14 +137,14 @@ namespace Server
         }
     }
 
-    internal class Hand 
+    public class Hand 
     {
         internal Card card_1 = new();
         internal Card card_2 = new();
         internal Hand() { }
     }
 
-    internal class Table
+    public class Table
     {
         internal List<Card> flop = new();
         internal Card turn = new();
@@ -152,7 +152,7 @@ namespace Server
         internal Table() { }
     }
 
-    internal class Deck
+    public class Deck
     {
         internal List<Card> deck = new();
         internal List<String> value = new();

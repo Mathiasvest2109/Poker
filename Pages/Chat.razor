@@ -1,0 +1,63 @@
+@page "/chat/{roomId}"
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.SignalR.Client
+
+<h3>Chat Room: @roomId</h3>
+
+<input @bind="message" placeholder="Type a message..." />
+<button @onclick="SendMessage">Send</button>
+
+<ul>
+    @foreach (var msg in messages)
+    {
+        <li>@msg</li>
+    }
+</ul>
+
+@code {
+    [Parameter] public string? roomId { get; set; }
+
+    private HubConnection? hubConnection;
+    private List<string> messages = new();
+    private string message = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (roomId == null)
+        {
+            Navigation.NavigateTo("/room");
+            return;
+        }
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/gamehub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            messages.Add($"{user}: {message}");
+            StateHasChanged();
+        });
+
+        await hubConnection.StartAsync();
+        await hubConnection.SendAsync("JoinRoom", roomId);
+    }
+
+    private async Task SendMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            await hubConnection!.SendAsync("SendMessage", roomId, "User", message);
+            message = "";
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

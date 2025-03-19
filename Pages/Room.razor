@@ -1,0 +1,86 @@
+@page "/room"
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.SignalR.Client
+
+<h3>Poker Game</h3>
+<h4>Create or Join a Room</h4>
+
+@if (roomId == null)
+{
+    <button @onclick="CreateRoom">Create Room</button>
+    <p>Or join an existing room:</p>
+    <input @bind="roomIdInput" placeholder="Enter Room ID" />
+    <button @onclick="JoinRoom">Join Room</button>
+
+    @if (errorMessage != null)
+    {
+        <p style="color: red;">@errorMessage</p>
+    }
+}
+else
+{
+    <p>Room ID: <strong>@roomId</strong></p>
+    <button @onclick="GoToChat">Go to Chat</button>
+}
+
+@code {
+    private HubConnection? hubConnection;
+    private string? roomId = null;
+    private string roomIdInput = "";
+    private string? errorMessage = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Console.WriteLine("[Room.razor] Initializing SignalR...");
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/gamehub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<string>("ReceiveRoomId", (generatedRoomId) =>
+        {
+            Console.WriteLine($"[Room.razor] Room Created: {generatedRoomId}");
+            roomId = generatedRoomId;
+            StateHasChanged();
+        });
+
+        hubConnection.On<string>("JoinSuccess", (joinedRoomId) =>
+        {
+            Console.WriteLine($"[Room.razor] Successfully joined Room: {joinedRoomId}");
+            roomId = joinedRoomId;
+            StateHasChanged();
+        });
+
+        hubConnection.On<string>("JoinFailed", (error) =>
+        {
+            Console.WriteLine($"[Room.razor] Join Failed: {error}");
+            errorMessage = error;
+            StateHasChanged();
+        });
+
+        await hubConnection.StartAsync();
+        Console.WriteLine("[Room.razor] SignalR Connected!");
+    }
+
+    private async Task CreateRoom()
+    {
+        Console.WriteLine("[Room.razor] Create Room button clicked!");
+        await hubConnection!.SendAsync("CreateRoom");
+    }
+
+    private async Task JoinRoom()
+    {
+        Console.WriteLine($"[Room.razor] Attempting to Join Room: {roomIdInput}");
+        if (!string.IsNullOrWhiteSpace(roomIdInput))
+        {
+            await hubConnection!.SendAsync("JoinRoom", roomIdInput);
+        }
+    }
+
+    private void GoToChat()
+    {
+        Console.WriteLine($"[Room.razor] Navigating to /chat/{roomId}");
+        Navigation.NavigateTo($"/chat/{roomId}");
+    }
+}
