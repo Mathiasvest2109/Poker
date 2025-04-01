@@ -1,0 +1,142 @@
+@page "/lobby"
+@rendermode InteractiveServer
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+<h1>Poker Lobby</h1>
+
+@if (!joined)
+{
+    <div>
+        <label>Table ID:</label>
+        <input @bind="tableId" placeholder="Enter or generate..." />
+
+        <button @onclick="CreateTable">Create Table</button>
+        <button @onclick="JoinTable">Join Table</button>
+
+        <p>@status</p>
+    </div>
+}
+else
+{
+    <div>
+        <h3>Joined table: @tableId</h3>
+
+        <label>Your nickname:</label>
+        <input @bind="nickname" placeholder="Enter nickname..." />
+        <button @onclick="SubmitNickname">Submit</button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(nickname))
+{
+    <div class="mt-4">
+        <h4>Chat</h4>
+
+        <ul>
+            @foreach (var line in chatLog)
+            {
+                <li>@line</li>
+            }
+        </ul>
+
+        <input @bind="messageInput" placeholder="Type message..." />
+        <button @onclick="SendMessage">Send</button>
+    </div>
+}
+
+@code {
+    private string tableId = "";
+    private string nickname = "";
+    private bool joined = false;
+    private string status = "";
+    private List<string> chatLog = new();
+    private string messageInput = "";
+
+    private IJSObjectReference? jsModule;
+
+    private async Task CreateTable()
+    {
+        try
+        {
+            var response = await Http.PostAsync("http://localhost:5005/api/table/create", null);
+            var result = await response.Content.ReadFromJsonAsync<CreateTableResponse>();
+            tableId = result?.TableId ?? "";
+            status = $"Created table: {tableId}";
+            joined = true;
+        }
+        catch
+        {
+            status = "Failed to create table.";
+        }
+    }
+
+    private async Task JoinTable()
+    {
+        try
+        {
+            var response = await Http.GetAsync($"http://localhost:5005/api/table/join/{tableId}");
+            if (response.IsSuccessStatusCode)
+            {
+                status = $"Joined table: {tableId}";
+                joined = true;
+            }
+            else
+            {
+                status = "Table not found.";
+            }
+        }
+        catch
+        {
+            status = "Failed to join table.";
+        }
+    }
+
+    private async Task SubmitNickname()
+    {
+        status = $"Nickname set to: {nickname}";
+
+        jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+
+        await jsModule.InvokeVoidAsync(
+            "startConnection",
+            tableId,
+            nickname,
+            DotNetObjectReference.Create(this),
+            nameof(ReceiveMessage),
+            nameof(PlayerJoined)
+        );
+    }
+
+    [JSInvokable]
+    public void ReceiveMessage(string player, string message, DateTime timestamp)
+    {
+        Console.WriteLine($"[DEBUG] JS message: {player}: {message}");
+        chatLog.Add($"[{timestamp:HH:mm}] {player}: {message}");
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void PlayerJoined(string playerName)
+    {
+        Console.WriteLine($"[DEBUG] Player joined: {playerName}");
+        chatLog.Add($"🎉 {playerName} joined the table");
+        StateHasChanged();
+    }
+
+    private async Task SendMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(messageInput))
+        {
+            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+
+            await jsModule.InvokeVoidAsync("sendMessage", tableId, messageInput);
+            messageInput = "";
+        }
+    }
+
+    private class CreateTableResponse
+    {
+        public string TableId { get; set; }
+    }
+}
