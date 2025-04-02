@@ -2,8 +2,16 @@
 @rendermode InteractiveServer
 @inject IJSRuntime JS
 @inject HttpClient Http
+@inject NavigationManager Nav
 
 <h1>Poker Lobby</h1>
+
+@if (!string.IsNullOrEmpty(warningMessage))
+{
+    <div class="alert alert-warning" role="alert">
+        ⚠️ @warningMessage
+    </div>
+}
 
 @if (!joined)
 {
@@ -52,6 +60,8 @@ else
     private string status = "";
     private List<string> chatLog = new();
     private string messageInput = "";
+    private string warningMessage = "";
+
 
     private IJSObjectReference? jsModule;
 
@@ -117,10 +127,23 @@ else
     }
 
     [JSInvokable]
+    public async Task OnJoinFailed(string tableId, string reason)
+    {
+        warningMessage = $"Table is full or unavailable.";
+        Console.WriteLine($"[JOIN FAIL] {reason}");
+
+        // Show banner for 3 seconds, then redirect
+        StateHasChanged();
+        await Task.Delay(3000);
+        Nav.NavigateTo("/lobby", forceLoad: true);
+    }
+
+
+    [JSInvokable]
     public void PlayerJoined(string playerName)
     {
         Console.WriteLine($"[DEBUG] Player joined: {playerName}");
-        chatLog.Add($"🎉 {playerName} joined the table");
+        chatLog.Add($"{playerName} joined the table");
         StateHasChanged();
     }
 

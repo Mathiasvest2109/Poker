@@ -17,15 +17,15 @@ public class PokerHub : Hub
     {
         var connectionId = Context.ConnectionId;
 
-        if (_tableManager.TryJoinTable(tableId, connectionId, playerName))
-        {
-            await Groups.AddToGroupAsync(connectionId, tableId);
-            await Clients.Group(tableId).SendAsync("PlayerJoined", playerName);
-        }
-        else
+        var joined = _tableManager.TryJoinTable(tableId, connectionId, playerName);
+        if (!joined)
         {
             await Clients.Caller.SendAsync("TableJoinFailed", tableId, "Table is full or does not exist.");
+            return; //Stop here if join fails
         }
+
+        await Groups.AddToGroupAsync(connectionId, tableId);
+        await Clients.Group(tableId).SendAsync("PlayerJoined", playerName);
     }
 
 

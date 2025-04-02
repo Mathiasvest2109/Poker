@@ -10,8 +10,13 @@ export async function startConnection(tableId, nickname, dotnetRef, receiveCallb
         dotnetRef.invokeMethodAsync(receiveCallback, user, message, timestamp);
     });
 
+    connection.on("TableJoinFailed", async (tableId, reason) => {
+        await dotnetRef.invokeMethodAsync("OnJoinFailed", tableId, reason);
+        await connection.stop(); // clean up
+    });
+
     connection.on("PlayerJoined", (playerName) => {
-        console.log("👤 Player joined:", playerName);
+        console.log("Player joined:", playerName);
         dotnetRef.invokeMethodAsync(joinCallback, playerName);
     });
 

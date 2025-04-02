@@ -22,7 +22,10 @@ public class TableManager
         var players = _tables[tableId];
 
         if (players.Count >= 4)
+        {
+            Console.WriteLine("too many players detected");
             return false;
+        }
 
         _connectionToName[connectionId] = playerName;
         return players.Add(connectionId); // Returns true if join was successful
