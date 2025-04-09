@@ -303,7 +303,7 @@ namespace Server
         }
 
         // Main method: game testing
-        public static void Main()
+        /*public static void Main()
         {
             Gamecontroller game = new("p1", "p2", "p3", "p4");
 
@@ -314,7 +314,7 @@ namespace Server
             }
 
             Console.WriteLine("The winner of the room is: " + game.players.First().playername);
-        }
+        }*/
     }
 
     // Player class represents each participant in the game.
