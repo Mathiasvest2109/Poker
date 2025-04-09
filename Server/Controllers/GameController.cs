@@ -104,139 +104,140 @@ namespace Server
         {
             int smallBlind = 10;
             int bigBlind = 20;
+            Dictionary<Player, int> playerBets = new();
             int currentBet = 0;
-            int[] playerBets = new int[players_round.Count];
-            players_fold.RemoveAll(p => !players_round.Contains(p)); // Clean up folds
+            players_fold.RemoveAll(p => !players_round.Contains(p));
+
+            foreach (var p in players_round)
+                playerBets[p] = 0;
 
             if (isPreFlop)
             {
-                int sbIndex = dealerIndex % players_round.Count;
-                int bbIndex = (dealerIndex + 1) % players_round.Count;
+                int sbIndex = (dealerIndex + 1) % players_round.Count;
+                int bbIndex = (dealerIndex + 2) % players_round.Count;
 
                 Player sb = players_round[sbIndex];
                 Player bb = players_round[bbIndex];
 
                 sb.chips_amount -= smallBlind;
-                playerBets[sbIndex] = smallBlind;
+                playerBets[sb] = smallBlind;
 
                 bb.chips_amount -= bigBlind;
-                playerBets[bbIndex] = bigBlind;
+                playerBets[bb] = bigBlind;
 
                 currentBet = bigBlind;
                 chips_pot += smallBlind + bigBlind;
             }
 
+            int startingIndex = (dealerIndex + 3) % players_round.Count;
+            while (players_fold.Contains(players_round[startingIndex]) || players_round[startingIndex].isAllIn)
+                startingIndex = (startingIndex + 1) % players_round.Count;
+
+            int currentPlayerIndex = startingIndex;
+            int lastToRaiseIndex = -1;
             bool bettingComplete = false;
+            HashSet<Player> playersActed = new();
 
-            do
+            while (!bettingComplete && players_round.Count > 1)
             {
-                bool someoneRaised = false;
-                List<Player> foldedThisRound = new();
+                if (currentPlayerIndex >= players_round.Count) currentPlayerIndex = 0;
 
-                foreach (Player p in players_round)
+                Player p = players_round[currentPlayerIndex];
+                if (players_fold.Contains(p) || p.isAllIn)
                 {
-                    if (players_fold.Contains(p) || p.isAllIn) continue;
+                    currentPlayerIndex = (currentPlayerIndex + 1) % players_round.Count;
+                    continue;
+                }
 
-                    int i = players_round.IndexOf(p);
-                    int playerBet = playerBets[i];
-                    int toCall = currentBet - playerBet;
+                int toCall = currentBet - playerBets[p];
 
-                    Console.WriteLine($"\nPlayer {p.playername}, your turn. Chips: {p.chips_amount}. Current to call: {toCall}");
+                Console.WriteLine($"\nPlayer {p.playername}, your turn. Chips: {p.chips_amount}. Current to call: {toCall}");
 
-                    if (toCall > p.chips_amount)
+                if (toCall > p.chips_amount)
+                {
+                    Console.WriteLine("You don't have enough chips to call the full amount, but you can still go all-in.");
+                    Console.WriteLine("Choose: f (fold), c (go all-in), or r (raise — if possible)");
+                }
+                else
+                {
+                    Console.WriteLine("Choose: f (fold), c (call/check), or r (raise)");
+                }
+
+                string action = Console.ReadLine().Trim().ToLower();
+                while (!new[] { "f", "c", "r" }.Contains(action))
+                {
+                    Console.WriteLine("Invalid input. Try again: f (fold), c (call/check), r (raise)");
+                    action = Console.ReadLine().Trim().ToLower();
+                }
+
+                playersActed.Add(p);
+
+                if (action == "f")
+                {
+                    Console.WriteLine($"{p.playername} folds.");
+                    players_fold.Add(p);
+                    players_round.Remove(p);
+                    playerBets.Remove(p);
+                    if (currentPlayerIndex >= players_round.Count) currentPlayerIndex = 0;
+                    continue;
+                }
+                else if (action == "c")
+                {
+                    int amountToCall = Math.Min(toCall, p.chips_amount);
+
+                    if (amountToCall < toCall)
                     {
-                        Console.WriteLine("You don't have enough chips to call the full amount, but you can still go all-in.");
-                        Console.WriteLine("Choose: f (fold), c (go all-in), or r (raise — if possible)");
+                        Console.WriteLine($"{p.playername} goes all-in with {amountToCall} chips.");
+                        p.isAllIn = true;
+                    }
+                    else if (amountToCall > 0)
+                    {
+                        Console.WriteLine($"{p.playername} calls {amountToCall}.");
                     }
                     else
                     {
-                        Console.WriteLine("Choose: f (fold), c (call/check), or r (raise)");
+                        Console.WriteLine($"{p.playername} checks.");
                     }
 
-                    string action = Console.ReadLine().Trim().ToLower();
-                    while (!new[] { "f", "c", "r" }.Contains(action))
+                    p.chips_amount -= amountToCall;
+                    playerBets[p] += amountToCall;
+                    chips_pot += amountToCall;
+                }
+                else if (action == "r")
+                {
+                    Console.WriteLine("Enter total amount to bet (must be more than current to call):");
+                    int raiseTo;
+                    bool validInput = int.TryParse(Console.ReadLine().Trim(), out raiseTo);
+
+                    while (!validInput || raiseTo <= currentBet || raiseTo > p.chips_amount + playerBets[p])
                     {
-                        Console.WriteLine("Invalid input. Try again: f (fold), c (call/check), r (raise)");
-                        action = Console.ReadLine().Trim().ToLower();
+                        Console.WriteLine("Invalid raise. Must be more than current bet and within your chip range.");
+                        validInput = int.TryParse(Console.ReadLine().Trim(), out raiseTo);
                     }
 
-                    if (action == "f")
-                    {
-                        Console.WriteLine($"{p.playername} folds.");
-                        players_fold.Add(p);
-                        foldedThisRound.Add(p);
-                        continue;
-                    }
-                    else if (action == "c")
-                    {
-                        int amountToCall = Math.Min(toCall, p.chips_amount);
+                    int raiseAmount = raiseTo - playerBets[p];
+                    p.chips_amount -= raiseAmount;
+                    playerBets[p] = raiseTo;
+                    currentBet = raiseTo;
+                    chips_pot += raiseAmount;
 
-                        if (amountToCall < toCall)
-                        {
-                            Console.WriteLine($"{p.playername} goes all-in with {amountToCall} chips.");
-                            p.isAllIn = true;
-                        }
-                        else if (amountToCall > 0)
-                        {
-                            Console.WriteLine($"{p.playername} calls {amountToCall}.");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"{p.playername} checks.");
-                        }
-
-                        p.chips_amount -= amountToCall;
-                        playerBets[i] += amountToCall;
-                        chips_pot += amountToCall;
-                    }
-                    else if (action == "r")
-                    {
-                        if (p.chips_amount + playerBets[i] <= currentBet)
-                        {
-                            Console.WriteLine("You don't have enough chips to raise. You're automatically going all-in instead.");
-                            int raise_amount = p.chips_amount;
-                            playerBets[i] += raise_amount;
-                            p.chips_amount = 0;
-                            p.isAllIn = true;
-                            chips_pot += raise_amount;
-                            continue;
-                        }
-
-                        Console.WriteLine("Enter total amount to bet (must be more than current to call):");
-                        int raiseTo;
-                        bool validInput = int.TryParse(Console.ReadLine().Trim(), out raiseTo);
-
-                        while (!validInput || raiseTo <= currentBet || raiseTo > p.chips_amount + playerBets[i])
-                        {
-                            Console.WriteLine("Invalid raise. Must be more than current bet and within your chip range.");
-                            validInput = int.TryParse(Console.ReadLine().Trim(), out raiseTo);
-                        }
-
-                        int raiseAmount = raiseTo - playerBets[i];
-                        p.chips_amount -= raiseAmount;
-                        playerBets[i] = raiseTo;
-                        currentBet = raiseTo;
-                        chips_pot += raiseAmount;
-                        someoneRaised = true;
-
-                        Console.WriteLine($"{p.playername} raises to {raiseTo}.");
-                    }
+                    lastToRaiseIndex = currentPlayerIndex;
+                    playersActed.Clear();
+                    playersActed.Add(p);
                 }
 
-                // Remove folded players after the loop to avoid messing with iteration
-                foreach (Player p in foldedThisRound)
-                {
-                    players_round.Remove(p);
-                }
+                currentPlayerIndex = (currentPlayerIndex + 1) % players_round.Count;
 
-                // Betting is complete if all active players have either matched the current bet or are all-in
-                bettingComplete = players_round.All(p =>
+                bool allMatched = players_round.All(pl =>
                 {
-                    int i = players_round.IndexOf(p);
-                    return p.isAllIn || playerBets[i] == currentBet;
+                    return pl.isAllIn || players_fold.Contains(pl) || playerBets[pl] == currentBet;
                 });
 
-            } while (!bettingComplete && players_round.Count > 1);
+                if (allMatched && players_round.All(pl => playersActed.Contains(pl)))
+                {
+                    bettingComplete = true;
+                }
+            }
         }
 
 
@@ -302,7 +303,7 @@ namespace Server
         }
 
         // Main method: game testing
-        /*public static void Main()
+        public static void Main()
         {
             Gamecontroller game = new("p1", "p2", "p3", "p4");
 
@@ -313,7 +314,7 @@ namespace Server
             }
 
             Console.WriteLine("The winner of the room is: " + game.players.First().playername);
-        }*/
+        }
     }
 
     // Player class represents each participant in the game.
@@ -570,3 +571,4 @@ namespace Server
             return 0;
         }
     }
+}
