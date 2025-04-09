@@ -49,6 +49,9 @@ namespace Server
         // Starts a new round: deals two cards to each player and processes initial betting.
         void Start_round()
         {
+            // Reset all-in flags before round
+            foreach (var p in players)
+                p.isAllIn = false;
             players_round = new List<Player>(players);
             deck.generateDeck();
             dealerIndex = (dealerIndex + 1) % players.Count;
@@ -105,10 +108,6 @@ namespace Server
             int[] playerBets = new int[players_round.Count];
             players_fold.RemoveAll(p => !players_round.Contains(p)); // Clean up folds
 
-            // Reset all-in flags before round
-            foreach (var p in players_round)
-                p.isAllIn = false;
-
             if (isPreFlop)
             {
                 int sbIndex = dealerIndex % players_round.Count;
@@ -128,13 +127,13 @@ namespace Server
             }
 
             bool bettingComplete = false;
-            bool someoneRaised;
 
             do
             {
-                someoneRaised = false;
+                bool someoneRaised = false;
+                List<Player> foldedThisRound = new();
 
-                foreach (Player p in players_round.ToList()) // snapshot to avoid list mod during loop
+                foreach (Player p in players_round)
                 {
                     if (players_fold.Contains(p) || p.isAllIn) continue;
 
@@ -165,7 +164,7 @@ namespace Server
                     {
                         Console.WriteLine($"{p.playername} folds.");
                         players_fold.Add(p);
-                        players_round.Remove(p);
+                        foldedThisRound.Add(p);
                         continue;
                     }
                     else if (action == "c")
@@ -195,11 +194,11 @@ namespace Server
                         if (p.chips_amount + playerBets[i] <= currentBet)
                         {
                             Console.WriteLine("You don't have enough chips to raise. You're automatically going all-in instead.");
-                            int raiseAmount = p.chips_amount;
-                            playerBets[i] += raiseAmount;
+                            int raise_amount = p.chips_amount;
+                            playerBets[i] += raise_amount;
                             p.chips_amount = 0;
                             p.isAllIn = true;
-                            chips_pot += raiseAmount;
+                            chips_pot += raise_amount;
                             continue;
                         }
 
@@ -224,7 +223,13 @@ namespace Server
                     }
                 }
 
-                // Betting is complete if everyone remaining has matched the currentBet or is all-in
+                // Remove folded players after the loop to avoid messing with iteration
+                foreach (Player p in foldedThisRound)
+                {
+                    players_round.Remove(p);
+                }
+
+                // Betting is complete if all active players have either matched the current bet or are all-in
                 bettingComplete = players_round.All(p =>
                 {
                     int i = players_round.IndexOf(p);
@@ -234,10 +239,11 @@ namespace Server
             } while (!bettingComplete && players_round.Count > 1);
         }
 
+
         // Ends the round: evaluates hands, determines winner(s), distributes chips
         void end_round()
         {
-            if(players_round.Count == 1)
+            if (players_round.Count == 1)
             {
                 Console.WriteLine($"{players_round[0].playername} wins the pot uncontested.");
                 players_round[0].chips_amount += chips_pot;
@@ -503,9 +509,16 @@ namespace Server
         // Defines the hierarchy of hand strengths from weakest to strongest.
         private static readonly List<string> HandRankings = new()
         {
-            "High Card", "One Pair", "Two Pair", "Three of a Kind",
-            "Straight", "Flush", "Full House", "Four of a Kind",
-            "Straight Flush", "Royal Flush"
+            "High Card",
+            "One Pair",
+            "Two Pair",
+            "Three of a Kind",
+            "Straight",
+            "Flush",
+            "Full House",
+            "Four of a Kind",
+            "Straight Flush",
+            "Royal Flush"
         };
 
         // Compares players' hands and returns a list of the player(s) with the best hand.
@@ -557,4 +570,3 @@ namespace Server
             return 0;
         }
     }
-}
