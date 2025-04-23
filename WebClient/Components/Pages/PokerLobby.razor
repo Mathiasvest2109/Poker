@@ -51,7 +51,28 @@ else
         <input @bind="messageInput" placeholder="Type message..." />
         <button @onclick="SendMessage">Send</button>
     </div>
+<div class="poker-table-container">
+    <div class="poker-table">
+        @for (int i = 0; i < 4; i++)
+        {
+            <div class="player-seat seat-@i">
+                @if (i < players.Count)
+                {
+                    <div class="player-card">
+                        <strong>@players[i]</strong>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-seat">Empty</div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
 }
+
 
 @code {
     private string tableId = "";
@@ -64,6 +85,9 @@ else
 
 
     private IJSObjectReference? jsModule;
+
+    // Dummy players list — you'd update this dynamically when players join.
+    private List<string> players = new() { "Alice", "Bob" };
 
     private async Task CreateTable()
     {

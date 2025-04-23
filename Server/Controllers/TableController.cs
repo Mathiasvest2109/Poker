@@ -31,4 +31,31 @@ public class TableController : ControllerBase
 
         return NotFound(new { error = "Table not found" });
     }
+
+    //Post: /api/table/actions/raise
+    [HttpPost("actions/raise")]
+    public IActionResult raiseAction(string tableId)
+    {
+        
+    
+    }
+
+    //Post: /api/table/actions/call
+    [HttpPost("actions/call")]
+    public IActionResult callAction(string tableId)
+    {
+
+
+    }
+
+    //Post: /api/table/actions/fold
+    [HttpPost("actions/fold")]
+    public IActionResult raiseAction(string tableId)
+    {
+
+
+    }
+
+
+
 }
