@@ -29,13 +29,13 @@ namespace Server
     // Gamecontroller class manages the overall poker game logic.
     class Gamecontroller
     {
-        public Deck deck = new();                   // The deck of cards.
-        public Table table = new();                 // The table with community cards.
-        public List<Player> players_round = new();  // Players still active in the current round.
-        public List<Player> players = new();        // All players in the game.
-        public List<Player> players_fold = new();   // Players that have folded.
-        public int chips_pot = 0;                  // Total chips bet in the current round.
-        public int dealerIndex = 0;                 // Index of the dealer, so big blind and small blind rotates.
+        internal Deck deck = new();                   // The deck of cards.
+        internal Table table = new();                 // The table with community cards.
+        internal List<Player> players_round = new();  // Players still active in the current round.
+        internal List<Player> players = new();        // All players in the game.
+        internal List<Player> players_fold = new();   // Players that have folded.
+        internal int chips_pot = 0;                  // Total chips bet in the current round.
+        internal int dealerIndex = 0;                 // Index of the dealer, so big blind and small blind rotates.
 
         // Constructor: Initializes the game with four players.
         Gamecontroller(string p1, string p2, string p3, string p4)
