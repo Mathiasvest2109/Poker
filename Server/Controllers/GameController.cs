@@ -27,7 +27,7 @@ namespace Server
     }
 
     // Gamecontroller class manages the overall poker game logic.
-    class Gamecontroller
+    internal class Gamecontroller
     {
         internal Deck deck = new();                   // The deck of cards.
         internal Table table = new();                 // The table with community cards.
