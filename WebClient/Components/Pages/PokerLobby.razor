@@ -39,40 +39,56 @@ else
 @if (!string.IsNullOrEmpty(nickname))
 {
     <div class="mt-4">
-        <h4>Chat</h4>
-
-        <ul>
-            @foreach (var line in chatLog)
-            {
-                <li>@line</li>
-            }
-        </ul>
-
-        <input @bind="messageInput" placeholder="Type message..." />
-        <button @onclick="SendMessage">Send</button>
+        <div class="chat-container">
+            <h4>Chat</h4>
+            <ul id="chatLog">
+                @foreach (var line in chatLog)
+                {
+                    <li>@line</li>
+                }
+            </ul>
+            <input @bind="messageInput" placeholder="Type command (e.g., !start)" />
+            <button @onclick="SendMessage">Send</button>
+        </div>
     </div>
-<div class="poker-table-container">
-    <div class="poker-table">
-        @for (int i = 0; i < 4; i++)
+    <div class="chat">
+        @foreach (var (Sender, Message, Timestamp) in chatMessages)
         {
-            <div class="player-seat seat-@i">
-                @if (i < players.Count)
-                {
-                    <div class="player-card">
-                        <strong>@players[i]</strong>
-                    </div>
-                }
-                else
-                {
-                    <div class="empty-seat">Empty</div>
-                }
+            <div>
+                <strong>@Sender</strong>: @Message <span class="timestamp">@Timestamp.ToLocalTime()</span>
             </div>
         }
     </div>
-</div>
-
+    <div class="poker-table-container">
+        <div class="poker-table">
+            @for (int i = 0; i < 4; i++)
+            {
+                <div class="player-seat seat-@i">
+                    @if (i < players.Count)
+                    {
+                        <div class="player-card">
+                            <strong>@players[i]</strong>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="empty-seat">Empty</div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+    <div class="player-actions">
+        <button @onclick="@(() => SendPlayerAction("call"))">Call</button>
+        <button @onclick="@(() => SendPlayerAction("fold"))">Fold</button>
+        <button @onclick="@(() => SendPlayerAction("raise"))">Raise</button>
+    </div>
 }
 
+@if (isHost)
+{
+    <button class="btn btn-success" @onclick="StartGame">Start Game</button>
+}
 
 @code {
     private string tableId = "";
@@ -82,7 +98,7 @@ else
     private List<string> chatLog = new();
     private string messageInput = "";
     private string warningMessage = "";
-
+    private bool isHost = false; // Set this based on the player's role
 
     private IJSObjectReference? jsModule;
 
@@ -98,6 +114,7 @@ else
             tableId = result?.TableId ?? "";
             status = $"Created table: {tableId}";
             joined = true;
+            isHost = true; // Set host flag
         }
         catch
         {
@@ -114,6 +131,7 @@ else
             {
                 status = $"Joined table: {tableId}";
                 joined = true;
+                isHost = false; // Not the host
             }
             else
             {
@@ -143,7 +161,7 @@ else
     }
 
     [JSInvokable]
-    public void ReceiveMessage(string player, string message, DateTime timestamp)
+    public void ReceiveMessage(string player, string message, string timestamp)
     {
         Console.WriteLine($"[DEBUG] JS message: {player}: {message}");
         chatLog.Add($"[{timestamp:HH:mm}] {player}: {message}");
@@ -162,7 +180,6 @@ else
         Nav.NavigateTo("/lobby", forceLoad: true);
     }
 
-
     [JSInvokable]
     public void PlayerJoined(string playerName)
     {
@@ -173,17 +190,35 @@ else
 
     private async Task SendMessage()
     {
-        if (!string.IsNullOrWhiteSpace(messageInput))
-        {
-            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        await jsModule.InvokeVoidAsync("sendMessage", tableId, nickname, messageInput); // <-- add nickname
+        messageInput = ""; // Clear the input field
+    }
 
-            await jsModule.InvokeVoidAsync("sendMessage", tableId, messageInput);
-            messageInput = "";
-        }
+    private async Task StartGame()
+    {
+        var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        await jsModule.InvokeVoidAsync("sendMessage", tableId, "System", "!start"); // <-- use "System"
+    }
+
+    private async Task SendPlayerAction(string action)
+    {
+        var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        await jsModule.InvokeVoidAsync("sendPlayerAction", tableId, nickname, action, 0); // Add raiseAmount if needed
     }
 
     private class CreateTableResponse
     {
         public string TableId { get; set; }
+    }
+
+    private List<(string Sender, string Message, DateTime Timestamp)> chatMessages = new();
+
+    [JSInvokable]
+    public Task AddChatMessage(string sender, string message, DateTime timestamp)
+    {
+        chatMessages.Add((sender, message, timestamp));
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 }
