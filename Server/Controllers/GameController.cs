@@ -10,12 +10,16 @@ namespace Server.Services
     // Extension method for picking and removing a random element from a list (used for dealing cards)
     public static class CollectionExtension
     {
+        // Random instance to generate random numbers.
         private static Random random = new Random();
 
+        // Extension method for IList<T> to retrieve and remove a random element.
         public static T Random<T>(this IList<T> list)
         {
+            // Choose a random element from the list.
             int index = random.Next(list.Count);
             T temp = list[index];
+            // Remove the selected element to avoid reusing it.
             list.RemoveAt(index);
             return temp;
         }
@@ -59,6 +63,8 @@ namespace Server.Services
         public string ConnectionId;
         public Hand hand;
         public int chips = 1000; // Starting chips
+        internal string handtype;
+        internal List<Card> besthand;
     }
 
     // Represents a player's hand (two cards)
@@ -114,7 +120,7 @@ namespace Server.Services
         public async Task PlayRoundAsync()
         {
             deck = new Deck(); // Reset deck with 52 cards
-
+            players_round = new List<Player>(players);
             foreach (var p in players_round)
             {
                 p.hand = new Hand
@@ -150,6 +156,7 @@ namespace Server.Services
             playerBets[smallBlindPlayer] = smallBlind;
             playerBets[bigBlindPlayer] = bigBlind;
             currentBet = bigBlind;
+            pot += smallBlind + bigBlind;
 
             // Announce blinds in chat
             await _hubContext.Clients.Group(_tableId).SendAsync(
@@ -162,6 +169,7 @@ namespace Server.Services
             actedThisRound.Clear();
             currentPlayerIndex = 0;
             await ProcessBettingAsync(true);
+
         }
 
         // Prompts the current player for an action (call/fold/raise)
@@ -326,14 +334,33 @@ namespace Server.Services
                 else if (contenders.Count > 1)
                 {
                     // Use the simple evaluator for now
-                    var winner = EvaluateBestHand(contenders);
-                    winner.chips += pot;
-                    await _hubContext.Clients.Group(_tableId).SendAsync(
-                        "ReceiveTableMessage",
-                        "System",
-                        $"Showdown! {winner.playername} wins the pot of {pot} chips with the highest card! (Simple evaluation)",
-                        DateTime.UtcNow
-                    );
+                    var winners = EvaluateBestHand(contenders);
+                    if (winners.Count == 1) {
+
+                        winners[0].chips += pot;
+
+                        await _hubContext.Clients.Group(_tableId).SendAsync(
+                            "ReceiveTableMessage",
+                            "System",
+                            $"Showdown! {winners[0].playername} wins the pot of {pot} chips.",
+                            DateTime.UtcNow
+                        );
+                    }
+                    else
+                    {
+                        int split = pot / winners.Count;
+                        foreach (Player winner in winners)
+                        {
+                            winner.chips += split;
+                        }
+                        String winners_text = string.Join(", ", winners.Select(p => p.playername));
+                        await _hubContext.Clients.Group(_tableId).SendAsync(
+                            "ReceiveTableMessage",
+                            "System",
+                            $"Showdown! It's a tie between: {winners_text}. Ther pot have been split equally between them, so they each get {split} chips",
+                            DateTime.UtcNow
+                        );
+                    }
                 }
                 else
                 {
@@ -347,10 +374,12 @@ namespace Server.Services
 
                 // Reset pot for next hand
                 pot = 0;
+
+                await PlayRoundAsync();
             }
         }
 
-        private Player EvaluateBestHand(List<Player> contenders)
+        private List<Player> EvaluateBestHand(List<Player> contenders)
         {
             // For each player, find their highest card (hole + community)
             Player bestPlayer = null;
@@ -369,15 +398,175 @@ namespace Server.Services
                 var allCards = new List<Card> { player.hand.card_1, player.hand.card_2 };
                 allCards.AddRange(community);
 
-                // Find the highest card value for this player
-                int max = allCards.Max(card => CardRank[card.value]);
-                if (max > bestRank)
+                // Find the highest card rank
+                player.handtype = PokerHandEvaluator.EvaluateHand(allCards);
+                player.besthand = PokerHandEvaluator.GetBestFiveCardHand(allCards);
+
+            }
+
+            return PokerHandComparer.ComparePlayers(contenders);
+        }
+    }
+
+    // PokerHandEvaluator class is responsible for evaluating the strength of poker hands.
+    internal static class PokerHandEvaluator
+    {
+        // Standard order of card values used to determine hand strength.
+        internal static readonly string[] CardValues = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
+
+        // Evaluates a 5-card hand and returns its ranking as a string.
+        internal static string EvaluateHand(List<Card> cards)
+        {
+            var sorted = cards.OrderBy(card => Array.IndexOf(CardValues, card.value)).ToList();
+
+            if (IsRoyalFlush(sorted)) return "Royal Flush";
+            if (IsStraightFlush(sorted)) return "Straight Flush";
+            if (IsFourOfAKind(sorted)) return "Four of a Kind";
+            if (IsFullHouse(sorted)) return "Full House";
+            if (IsFlush(sorted)) return "Flush";
+            if (IsStraight(sorted)) return "Straight";
+            if (IsThreeOfAKind(sorted)) return "Three of a Kind";
+            if (IsTwoPair(sorted)) return "Two Pair";
+            if (IsOnePair(sorted)) return "One Pair";
+
+            return "High Card";
+        }
+
+        // Returns the best 5-card hand out of a list of 7 cards.
+        internal static List<Card> GetBestFiveCardHand(List<Card> allCards)
+        {
+            var combinations = GetCombinations(allCards, 5);
+            List<Card> best = new();
+            string bestRank = "";
+
+            foreach (var combo in combinations)
+            {
+                string currentRank = EvaluateHand(combo);
+                if (best == null || PokerHandComparer.IsStronger(currentRank, combo, bestRank, best))
                 {
-                    bestRank = max;
-                    bestPlayer = player;
+                    best = combo;
+                    bestRank = currentRank;
                 }
             }
-            return bestPlayer;
+            return best;
+        }
+
+        // Generates all combinations of a certain size from a list of cards.
+        private static IEnumerable<List<Card>> GetCombinations(List<Card> cards, int length)
+        {
+            if (length == 0) yield return new List<Card>();
+            else
+            {
+                for (int i = 0; i <= cards.Count - length; i++)
+                {
+                    foreach (var tail in GetCombinations(cards.Skip(i + 1).ToList(), length - 1))
+                    {
+                        var result = new List<Card> { cards[i] };
+                        result.AddRange(tail);
+                        yield return result;
+                    }
+                }
+            }
+        }
+
+        // Hand type checkers below:
+        private static bool IsFlush(List<Card> cards) =>
+            cards.GroupBy(c => c.suit).Any(g => g.Count() >= 5);
+
+        private static bool IsStraight(List<Card> cards)
+        {
+            var indices = cards.Select(c => Array.IndexOf(CardValues, c.value)).Distinct().OrderBy(i => i).ToList();
+            for (int i = 0; i <= indices.Count - 5; i++)
+                if (indices[i + 4] - indices[i] == 4) return true;
+            return false;
+        }
+
+        private static bool IsStraightFlush(List<Card> cards) =>
+            cards.GroupBy(c => c.suit).Any(g => IsStraight(g.ToList()));
+
+        private static bool IsRoyalFlush(List<Card> cards)
+        {
+            var royalValues = new HashSet<string> { "10", "J", "Q", "K", "A" };
+            return cards.GroupBy(c => c.suit).Any(g => royalValues.All(v => g.Any(c => c.value == v)));
+        }
+
+        private static bool IsFourOfAKind(List<Card> cards) =>
+            cards.GroupBy(c => c.value).Any(g => g.Count() == 4);
+
+        private static bool IsFullHouse(List<Card> cards)
+        {
+            var groups = cards.GroupBy(c => c.value).ToList();
+            return groups.Any(g => g.Count() == 3) && groups.Count(g => g.Count() >= 2) > 1;
+        }
+
+        private static bool IsThreeOfAKind(List<Card> cards) =>
+            cards.GroupBy(c => c.value).Any(g => g.Count() == 3);
+
+        private static bool IsTwoPair(List<Card> cards) =>
+            cards.GroupBy(c => c.value).Count(g => g.Count() == 2) >= 2;
+
+        private static bool IsOnePair(List<Card> cards) =>
+            cards.GroupBy(c => c.value).Any(g => g.Count() == 2);
+    }
+
+    // PokerHandComparer class compares the evaluated hands of players and determines the winner(s).
+    internal class PokerHandComparer
+    {
+        // Defines the hierarchy of hand strengths from weakest to strongest.
+        private static readonly List<string> HandRankings = new()
+        {
+            "High Card", "One Pair", "Two Pair", "Three of a Kind",
+            "Straight", "Flush", "Full House", "Four of a Kind",
+            "Straight Flush", "Royal Flush"
+        };
+
+        // Compares players' hands and returns a list of the player(s) with the best hand.
+        internal static List<Player> ComparePlayers(List<Player> players)
+        {
+            List<Player> winners = new();
+            string bestRank = "";
+            List<Card> bestHand = new();
+
+            foreach (var player in players)
+            {
+                var rank = player.handtype;
+                var hand = player.besthand;
+
+                if (winners.Count == 0 || IsStronger(rank, hand, bestRank, bestHand))
+                {
+                    winners = new List<Player> { player };
+                    bestRank = rank;
+                    bestHand = hand;
+                }
+                else if (rank == bestRank && CompareHighCards(hand, bestHand) == 0)
+                {
+                    winners.Add(player);
+                }
+            }
+            return winners;
+        }
+
+        // Determines whether the first hand is stronger than the second, considering hand type and kickers.
+        internal static bool IsStronger(string rank1, List<Card> hand1, string rank2, List<Card> hand2)
+        {
+            int r1 = HandRankings.IndexOf(rank1);
+            int r2 = HandRankings.IndexOf(rank2);
+            if (r1 != r2) return r1 > r2;
+            return CompareHighCards(hand1, hand2) > 0;
+        }
+
+        // Compares two hands with the same rank based on their highest cards.
+        private static int CompareHighCards(List<Card> hand1, List<Card> hand2)
+        {
+            var sorted1 = hand1.OrderByDescending(c => Array.IndexOf(PokerHandEvaluator.CardValues, c.value)).ToList();
+            var sorted2 = hand2.OrderByDescending(c => Array.IndexOf(PokerHandEvaluator.CardValues, c.value)).ToList();
+            for (int i = 0; i < sorted1.Count; i++)
+            {
+                int cmp = Array.IndexOf(PokerHandEvaluator.CardValues, sorted1[i].value)
+                    .CompareTo(Array.IndexOf(PokerHandEvaluator.CardValues, sorted2[i].value));
+                if (cmp != 0) return cmp;
+            }
+            return 0;
         }
     }
 }
