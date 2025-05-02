@@ -11,8 +11,7 @@ namespace Server.Services
     public static class CollectionExtension
     {
         // Random instance to generate random numbers.
-        private static Random random = new Random();
-
+        private static readonly Random random = new Random();
         // Extension method for IList<T> to retrieve and remove a random element.
         public static T Random<T>(this IList<T> list)
         {
@@ -35,7 +34,7 @@ namespace Server.Services
     // Represents a deck of cards
     public class Deck
     {
-        public List<Card> deck = new();
+        public List<Card> d = new();
 
         public Deck()
         {
@@ -44,15 +43,7 @@ namespace Server.Services
             string[] values = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
             foreach (var suit in suits)
                 foreach (var value in values)
-                    deck.Add(new Card { suit = suit, value = value });
-        }
-
-        public Card RandomCard()
-        {
-            int index = new Random().Next(deck.Count);
-            Card temp = deck[index];
-            deck.RemoveAt(index);
-            return temp;
+                    d.Add(new Card { suit = suit, value = value });
         }
     }
 
@@ -125,8 +116,8 @@ namespace Server.Services
             {
                 p.hand = new Hand
                 {
-                    card_1 = deck.RandomCard(),
-                    card_2 = deck.RandomCard()
+                    card_1 = CollectionExtension.Random<Card>(deck.d),
+                    card_2 = CollectionExtension.Random<Card>(deck.d)
                 };
                 playerBets[p] = 0;
             }
@@ -144,6 +135,7 @@ namespace Server.Services
             }
 
             // Determine small and big blind positions
+            dealerIndex = (dealerIndex + 1) % players.Count;
             int smallBlindIndex = (dealerIndex + 1) % players_round.Count;
             int bigBlindIndex = (dealerIndex + 2) % players_round.Count;
 
@@ -269,9 +261,9 @@ namespace Server.Services
             if (bettingRound == 1)
             {
                 // Deal the flop
-                table.flop1 = deck.RandomCard();
-                table.flop2 = deck.RandomCard();
-                table.flop3 = deck.RandomCard();
+                table.flop1 = CollectionExtension.Random<Card>(deck.d);
+                table.flop2 = CollectionExtension.Random<Card>(deck.d);
+                table.flop3 = CollectionExtension.Random<Card>(deck.d);
                 await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
@@ -283,7 +275,7 @@ namespace Server.Services
             else if (bettingRound == 2)
             {
                 // Deal the turn
-                table.turn = deck.RandomCard();
+                table.turn = CollectionExtension.Random<Card>(deck.d);
                 await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
@@ -295,7 +287,7 @@ namespace Server.Services
             else if (bettingRound == 3)
             {
                 // Deal the river
-                table.river = deck.RandomCard();
+                table.river = CollectionExtension.Random<Card>(deck.d);
                 await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
@@ -322,8 +314,8 @@ namespace Server.Services
                 if (contenders.Count == 1)
                 {
                     // Only one player left (should be handled earlier, but just in case)
-                    var winner = contenders[0];
-                    winner.chips += pot;
+                    Player winner = contenders[0];
+                    players.First(p => p == winner).chips += pot;
                     await _hubContext.Clients.Group(_tableId).SendAsync(
                         "ReceiveTableMessage",
                         "System",
@@ -334,10 +326,9 @@ namespace Server.Services
                 else if (contenders.Count > 1)
                 {
                     // Use the simple evaluator for now
-                    var winners = EvaluateBestHand(contenders);
+                    List<Player> winners = EvaluateBestHand(contenders);
                     if (winners.Count == 1) {
-
-                        winners[0].chips += pot;
+                        players.First(p => p == winners[0]).chips += pot; 
 
                         await _hubContext.Clients.Group(_tableId).SendAsync(
                             "ReceiveTableMessage",
@@ -351,7 +342,7 @@ namespace Server.Services
                         int split = pot / winners.Count;
                         foreach (Player winner in winners)
                         {
-                            winner.chips += split;
+                            players.Find(p => p == winner).chips += split;
                         }
                         String winners_text = string.Join(", ", winners.Select(p => p.playername));
                         await _hubContext.Clients.Group(_tableId).SendAsync(
@@ -372,6 +363,15 @@ namespace Server.Services
                     );
                 }
 
+                foreach (Player p in players)
+                {
+                    await _hubContext.Clients.Group(_tableId).SendAsync(
+                            "ReceiveTableMessage",
+                            "System",
+                            $"Showdown!  {p.playername} has {p.chips} left.",
+                            DateTime.UtcNow
+                        );
+                }
                 // Reset pot for next hand
                 pot = 0;
 
