@@ -36,3 +36,10 @@ export async function sendPlayerAction(tableId, playerName, action, raiseAmount 
         await connection.invoke("PlayerAction", tableId, playerName, action, raiseAmount);
     }
 }
+
+window.scrollChatToBottom = function () {
+    var chatDiv = document.getElementById('chatScroll');
+    if (chatDiv) {
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+};

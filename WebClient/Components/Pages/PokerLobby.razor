@@ -3,6 +3,7 @@
 @inject IJSRuntime JS
 @inject HttpClient Http
 @inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Web;
 
 <h1>Poker Lobby</h1>
 
@@ -47,15 +48,17 @@ else
                     <li>@line</li>
                 }
             </ul>
-            <input @bind="messageInput" placeholder="Type command (e.g., !start)" />
+            <input @bind="messageInput"
+                   placeholder="Message"
+                   @onkeydown="HandleChatKeyDown" />
             <button @onclick="SendMessage">Send</button>
         </div>
     </div>
-    <div class="chat">
+    <div id="chatScroll" style="height: 150px; width: 350px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: #fff;">
         @foreach (var (Sender, Message, Timestamp) in chatMessages)
         {
             <div>
-                <strong>@Sender</strong>: @Message <span class="timestamp">@Timestamp.ToLocalTime()</span>
+                <strong>@Sender</strong>: @Message
             </div>
         }
     </div>
@@ -166,6 +169,7 @@ else
         Console.WriteLine($"[DEBUG] JS message: {player}: {message}");
         chatLog.Add($"[{timestamp:HH:mm}] {player}: {message}");
         StateHasChanged();
+        _ = JS.InvokeVoidAsync("scrollChatToBottom");
     }
 
     [JSInvokable]
@@ -176,6 +180,7 @@ else
 
         // Show banner for 3 seconds, then redirect
         StateHasChanged();
+        _ = JS.InvokeVoidAsync("scrollChatToBottom");
         await Task.Delay(3000);
         Nav.NavigateTo("/lobby", forceLoad: true);
     }
@@ -186,6 +191,7 @@ else
         Console.WriteLine($"[DEBUG] Player joined: {playerName}");
         chatLog.Add($"{playerName} joined the table");
         StateHasChanged();
+        _ = JS.InvokeVoidAsync("scrollChatToBottom");
     }
 
     private async Task SendMessage()
@@ -207,6 +213,14 @@ else
         await jsModule.InvokeVoidAsync("sendPlayerAction", tableId, nickname, action, 0); // Add raiseAmount if needed
     }
 
+    private async Task HandleChatKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessage();
+        }
+    }
+
     private class CreateTableResponse
     {
         public string TableId { get; set; }
@@ -219,6 +233,7 @@ else
     {
         chatMessages.Add((sender, message, timestamp));
         StateHasChanged();
+        _ = JS.InvokeVoidAsync("scrollChatToBottom");
         return Task.CompletedTask;
     }
 }
