@@ -62,52 +62,7 @@ else
             </div>
         }
     </div>
-    <div class="poker-table-container">
-        <div class="poker-table">
-            @for (int i = 0; i < 4; i++)
-            {
-                <div class="player-seat seat-@i">
-                    @if (i < players.Count)
-                    {
-                        <div class="player-card">
-                            <strong>@players[i]</strong>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="empty-seat">Empty</div>
-                    }
-                </div>
-            }
-        </div>
-    </div>
-    <div class="player-actions">
-        <button @onclick="@(() => SendPlayerAction("call"))">Call/check</button>
-        <button @onclick="@(() => SendPlayerAction("fold"))">Fold</button>
-        <button @onclick="@(() => SendPlayerAction("raise"))">Raise</button>
-    </div>
-}
-
-<div class="lobby-layout">
-  
-
-    <div class="chat-container">
-        <h4>Chat</h4>
-
-        <div class="chat-box">
-            <ul>
-                @foreach (var line in chatLog)
-                {
-                    <li>@line</li>
-                }
-            </ul>
-        </div>
-
-        <input @bind="messageInput" placeholder="Type message..." />
-        <button @onclick="SendMessage">Send</button>
-    </div>
-
-    <div class="poker-table-container">
+        <div class="poker-table-container">
         <div class="poker-table">
                <!-- Shared Cards (Community Cards) -->
         <div class="community-cards">
@@ -146,7 +101,15 @@ else
           
         </div>
     </div>
-</div>
+    
+    <div class="player-actions">
+        <button @onclick="@(() => SendPlayerAction("call"))">Call/check</button>
+        <button @onclick="@(() => SendPlayerAction("fold"))">Fold</button>
+        <button @onclick="@(() => SendPlayerAction("raise"))">Raise</button>
+    </div>
+}
+
+
 
 @if (isHost)
 {
