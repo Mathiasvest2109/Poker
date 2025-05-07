@@ -1,13 +1,14 @@
 let connection;
+let dotnetRefGlobal;
 
 export async function startConnection(tableId, nickname, dotnetRef, receiveCallback, joinCallback) {
+    dotnetRefGlobal = dotnetRef;
     connection = new signalR.HubConnectionBuilder()
         .withUrl("http://localhost:5005/pokerhub")
         .build();
 
-    connection.on("ReceiveTableMessage", (user, message, timestamp) => {
-        console.log("Message received:", user, message, timestamp);
-        dotnetRef.invokeMethodAsync(receiveCallback, user, message, timestamp);
+    connection.on("ReceiveTableMessage", function (sender, message, timestamp) {
+        dotnetRef.invokeMethodAsync("AddChatMessage", sender, message, timestamp);
     });
 
     connection.on("TableJoinFailed", async (tableId, reason) => {
@@ -24,8 +25,21 @@ export async function startConnection(tableId, nickname, dotnetRef, receiveCallb
     await connection.invoke("JoinTable", tableId, nickname);
 }
 
-export async function sendMessage(tableId, message) {
+export async function sendMessage(tableId, sender, message) {
     if (connection) {
-        await connection.invoke("SendTableMessage", tableId, message);
+        await connection.invoke("SendMessage", tableId, sender, message);
     }
 }
+
+export async function sendPlayerAction(tableId, playerName, action, raiseAmount = 0) {
+    if (connection) {
+        await connection.invoke("PlayerAction", tableId, playerName, action, raiseAmount);
+    }
+}
+
+window.scrollChatToBottom = function () {
+    var chatDiv = document.getElementById('chatScroll');
+    if (chatDiv) {
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+    }
+};

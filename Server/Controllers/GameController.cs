@@ -1,19 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
-using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR;
+using Server.Hubs;
 
-namespace Server
+namespace Server.Services
 {
-    // Extension method class to add extra functionality to collections.
+    // Extension method for picking and removing a random element from a list (used for dealing cards)
     public static class CollectionExtension
     {
         // Random instance to generate random numbers.
-        private static Random random = new Random();
-
+        private static readonly Random random = new Random();
         // Extension method for IList<T> to retrieve and remove a random element.
         public static T Random<T>(this IList<T> list)
         {
@@ -26,380 +24,387 @@ namespace Server
         }
     }
 
-    // Gamecontroller class manages the overall poker game logic.
-    class Gamecontroller
+    // Represents a playing card
+    public class Card
     {
-        public Deck deck = new();                   // The deck of cards.
-        public Table table = new();                 // The table with community cards.
-        public List<Player> players_round = new();  // Players still active in the current round.
-        public List<Player> players = new();        // All players in the game.
-        public List<Player> players_fold = new();   // Players that have folded.
-        public int chips_pot = 0;                  // Total chips bet in the current round.
-        public int dealerIndex = 0;                 // Index of the dealer, so big blind and small blind rotates.
+        public string suit;
+        public string value;
+    }
 
-        // Constructor: Initializes the game with four players.
-        Gamecontroller(string p1, string p2, string p3, string p4)
+    // Represents a deck of cards
+    public class Deck
+    {
+        public List<Card> d = new();
+
+        public Deck()
         {
-            players.Add(new Player(p1));
-            players.Add(new Player(p2));
-            players.Add(new Player(p3));
-            players.Add(new Player(p4));
+            // Initialize a standard 52-card deck
+            string[] suits = { "Hearts", "Diamonds", "Clubs", "Spades" };
+            string[] values = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
+            foreach (var suit in suits)
+                foreach (var value in values)
+                    d.Add(new Card { suit = suit, value = value });
         }
+    }
 
-        // Starts a new round: deals two cards to each player and processes initial betting.
-        void Start_round()
+    // Represents a player in the game
+    public class Player
+    {
+        public string playername;
+        public string ConnectionId;
+        public Hand hand;
+        public int chips = 1000; // Starting chips
+        internal string handtype;
+        internal List<Card> besthand;
+    }
+
+    // Represents a player's hand (two cards)
+    public class Hand
+    {
+        public Card card_1;
+        public Card card_2;
+    }
+
+    // Represents the community cards on the table
+    public class Table
+    {
+        public Card flop1, flop2, flop3, turn, river;
+    }
+
+    // Main game controller for a single table
+    public class Gamecontroller
+    {
+        private readonly IHubContext<PokerHub> _hubContext;
+        private readonly string _tableId;
+        public List<Player> players = new();
+        public List<Player> players_round = new();
+        public int currentPlayerIndex = 0;
+        public List<Player> players_fold = new();
+        public Deck deck = new();
+        public Table table = new();
+        private int bettingRound = 0; // 0 = pre-flop, 1 = flop, 2 = turn, 3 = river
+        private HashSet<string> actedThisRound = new();
+        private int currentBet = 0;
+        private Dictionary<Player, int> playerBets = new();
+        private int dealerIndex = 0;
+        private int smallBlind = 10;
+        private int bigBlind = 20;
+        private int pot = 0;
+
+        private static readonly Dictionary<string, int> CardRank = new()
         {
-            // Reset all-in flags before round
-            foreach (var p in players)
-                p.isAllIn = false;
+            ["2"] = 2, ["3"] = 3, ["4"] = 4, ["5"] = 5, ["6"] = 6, ["7"] = 7, ["8"] = 8, ["9"] = 9,
+            ["10"] = 10, ["J"] = 11, ["Q"] = 12, ["K"] = 13, ["A"] = 14
+        };
+
+        // Constructor: initializes players and stores SignalR context and table id
+        public Gamecontroller(List<TablePlayer> tablePlayers, IHubContext<PokerHub> hubContext, string tableId)
+        {
+            _hubContext = hubContext;
+            _tableId = tableId;
+            foreach (var tp in tablePlayers)
+                players.Add(new Player { playername = tp.Name, ConnectionId = tp.ConnectionId });
             players_round = new List<Player>(players);
-            deck.generateDeck();
+        }
+
+        // Starts a new round: deals cards, notifies players, and begins betting
+        public async Task PlayRoundAsync()
+        {
+            deck = new Deck(); // Reset deck with 52 cards
+            players_round = new List<Player>(players);
+            foreach (var p in players_round)
+            {
+                p.hand = new Hand
+                {
+                    card_1 = CollectionExtension.Random<Card>(deck.d),
+                    card_2 = CollectionExtension.Random<Card>(deck.d)
+                };
+                playerBets[p] = 0;
+            }
+
+            await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The game has started!", DateTime.UtcNow);
+
+            foreach (var player in players)
+            {
+                await _hubContext.Clients.Group(_tableId).SendAsync(
+                    "ReceiveTableMessage",
+                    "System",
+                    $"{player.playername} was dealt {player.hand.card_1.value} of {player.hand.card_1.suit} and {player.hand.card_2.value} of {player.hand.card_2.suit}",
+                    DateTime.UtcNow
+                );
+            }
+
+            // Determine small and big blind positions
             dealerIndex = (dealerIndex + 1) % players.Count;
+            int smallBlindIndex = (dealerIndex + 1) % players_round.Count;
+            int bigBlindIndex = (dealerIndex + 2) % players_round.Count;
 
-            // Loop through each player in the round
-            foreach (Player p in players_round)
+            Player smallBlindPlayer = players_round[smallBlindIndex];
+            Player bigBlindPlayer = players_round[bigBlindIndex];
+
+            // Deduct blinds from chips and set initial bets
+            smallBlindPlayer.chips -= smallBlind;
+            bigBlindPlayer.chips -= bigBlind;
+            playerBets[smallBlindPlayer] = smallBlind;
+            playerBets[bigBlindPlayer] = bigBlind;
+            currentBet = bigBlind;
+            pot += smallBlind + bigBlind;
+
+            // Announce blinds in chat
+            await _hubContext.Clients.Group(_tableId).SendAsync(
+                "ReceiveTableMessage", "System",
+                $"{smallBlindPlayer.playername} posts small blind ({smallBlind}), {bigBlindPlayer.playername} posts big blind ({bigBlind})",
+                DateTime.UtcNow
+            );
+
+            bettingRound = 0;
+            actedThisRound.Clear();
+            currentPlayerIndex = 0;
+            await ProcessBettingAsync(true);
+
+        }
+
+        // Prompts the current player for an action (call/fold/raise)
+        public async Task ProcessBettingAsync(bool isPreFlop)
+        {
+            // End hand if only one player remains
+            if (players_round.Count - players_fold.Count == 1)
             {
-                // Deal two cards to each player from the deck
-                p.hand.card_1 = deck.deck.Random<Card>();
-                p.hand.card_2 = deck.deck.Random<Card>();
-
-                // Show cards to user
-                Console.WriteLine($"{p.playername}: {p.hand.card_1.suit}_{p.hand.card_1.value}, {p.hand.card_2.suit}_{p.hand.card_2.value}");
+                var winner = players_round.First(p => !players_fold.Contains(p));
+                await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", $"{winner.playername} wins the hand!", DateTime.UtcNow);
+                return;
             }
 
-            ProcessBetting(true);
-        }
-
-        // Handles flop (first 3 community cards)
-        void flop_round()
-        {
-            Console.WriteLine("Flop: ");
-            for (int i = 0; i < 3; i++)
+            // End betting round if all non-folded players have acted
+            if (actedThisRound.Count >= players_round.Count - players_fold.Count)
             {
-                table.flop.Add(deck.deck.Random<Card>());
-                Console.WriteLine($"{table.flop[i].suit}_{table.flop[i].value}");
+                await NextBettingRound();
+                return;
             }
 
-            ProcessBetting(false);
+            // Find the next player who hasn't folded and hasn't acted
+            Player p = null;
+            int startIdx = currentPlayerIndex;
+            do
+            {
+                p = players_round[currentPlayerIndex];
+                if (!players_fold.Contains(p) && !actedThisRound.Contains(p.playername))
+                    break;
+                currentPlayerIndex = (currentPlayerIndex + 1) % players_round.Count;
+            } while (currentPlayerIndex != startIdx);
+
+            // Notify all clients whose turn it is
+            await _hubContext.Clients.Group(_tableId).SendAsync("CurrentPlayer", p.playername);
+
+            // Prompt the current player for their action
+            int toCall = currentBet - playerBets[p];
+            await _hubContext.Clients.Client(p.ConnectionId)
+                .SendAsync("PromptPlayerAction", p.playername, toCall, currentBet);
         }
 
-        // Handles turn (fourth community card)
-        void turn_round()
+        // Handles a player's action and advances the betting round
+        public async Task HandlePlayerActionAsync(string playerName, string action, int raiseAmount)
         {
-            table.turn = deck.deck.Random<Card>();
-            Console.WriteLine($"Turn: {table.turn.suit}_{table.turn.value}");
-            ProcessBetting(false);
+            var p = players_round.Find(x => x.playername == playerName);
+
+            // Prevent duplicate folds
+            if (action == "fold" && !players_fold.Contains(p))
+                players_fold.Add(p);
+
+            // Handle call/raise (very basic demo logic)
+            if (action == "call")
+            {
+                int toCall = currentBet - playerBets[p];
+                if (toCall > p.chips) toCall = p.chips; // All-in protection
+                p.chips -= toCall;
+                pot += toCall;
+                playerBets[p] += toCall;
+            }
+            else if (action == "raise")
+            {
+                int toCall = currentBet - playerBets[p];
+                int totalBet = toCall + raiseAmount;
+                if (totalBet > p.chips) totalBet = p.chips; // All-in protection
+                p.chips -= totalBet;
+                pot += totalBet;
+                playerBets[p] += totalBet;
+                currentBet += raiseAmount;
+            }
+
+            await _hubContext.Clients.Group(_tableId).SendAsync(
+                "ReceiveTableMessage",
+                "System",
+                $"Pot is now {pot} chips.",
+                DateTime.UtcNow
+            );
+
+            actedThisRound.Add(playerName);
+
+            // Advance to next player
+            currentPlayerIndex = (currentPlayerIndex + 1) % players_round.Count;
+
+            await ProcessBettingAsync(bettingRound == 0);
         }
 
-        // Handles river (fifth and final community card)
-        void river_round()
+        // Advances to the next betting round or ends the hand
+        private async Task NextBettingRound()
         {
-            table.river = deck.deck.Random<Card>();
-            Console.WriteLine($"River: {table.river.suit}_{table.river.value}");
-            ProcessBetting(false);
-        }
+            actedThisRound.Clear();
+            currentPlayerIndex = 0;
+            bettingRound++;
 
-        // Shared method for handling betting interactions
-        void ProcessBetting(bool isPreFlop)
-        {
-            int smallBlind = 10;
-            int bigBlind = 20;
-            Dictionary<Player, int> playerBets = new();
-            int currentBet = 0;
-            players_fold.RemoveAll(p => !players_round.Contains(p));
-
+            // Reset player bets for the new round
             foreach (var p in players_round)
                 playerBets[p] = 0;
+            currentBet = 0;
 
-            if (isPreFlop)
+            if (bettingRound == 1)
             {
-                int sbIndex = (dealerIndex + 1) % players_round.Count;
-                int bbIndex = (dealerIndex + 2) % players_round.Count;
-
-                Player sb = players_round[sbIndex];
-                Player bb = players_round[bbIndex];
-
-                sb.chips_amount -= smallBlind;
-                playerBets[sb] = smallBlind;
-
-                bb.chips_amount -= bigBlind;
-                playerBets[bb] = bigBlind;
-
-                currentBet = bigBlind;
-                chips_pot += smallBlind + bigBlind;
+                // Deal the flop
+                table.flop1 = CollectionExtension.Random<Card>(deck.d);
+                table.flop2 = CollectionExtension.Random<Card>(deck.d);
+                table.flop3 = CollectionExtension.Random<Card>(deck.d);
+                await _hubContext.Clients.Group(_tableId).SendAsync(
+                    "ReceiveTableMessage",
+                    "System",
+                    $"Flop: {table.flop1.value} of {table.flop1.suit}, {table.flop2.value} of {table.flop2.suit}, {table.flop3.value} of {table.flop3.suit}",
+                    DateTime.UtcNow
+                );
+                await ProcessBettingAsync(false);
             }
-
-            int startingIndex = (dealerIndex + 3) % players_round.Count;
-            while (players_fold.Contains(players_round[startingIndex]) || players_round[startingIndex].isAllIn)
-                startingIndex = (startingIndex + 1) % players_round.Count;
-
-            int currentPlayerIndex = startingIndex;
-            int lastToRaiseIndex = -1;
-            bool bettingComplete = false;
-            HashSet<Player> playersActed = new();
-
-            while (!bettingComplete && players_round.Count > 1)
+            else if (bettingRound == 2)
             {
-                if (currentPlayerIndex >= players_round.Count) currentPlayerIndex = 0;
-
-                Player p = players_round[currentPlayerIndex];
-                if (players_fold.Contains(p) || p.isAllIn)
-                {
-                    currentPlayerIndex = (currentPlayerIndex + 1) % players_round.Count;
-                    continue;
-                }
-
-                int toCall = currentBet - playerBets[p];
-
-                Console.WriteLine($"\nPlayer {p.playername}, your turn. Chips: {p.chips_amount}. Current to call: {toCall}");
-
-                if (toCall > p.chips_amount)
-                {
-                    Console.WriteLine("You don't have enough chips to call the full amount, but you can still go all-in.");
-                    Console.WriteLine("Choose: f (fold), c (go all-in), or r (raise — if possible)");
-                }
-                else
-                {
-                    Console.WriteLine("Choose: f (fold), c (call/check), or r (raise)");
-                }
-
-                string action = Console.ReadLine().Trim().ToLower();
-                while (!new[] { "f", "c", "r" }.Contains(action))
-                {
-                    Console.WriteLine("Invalid input. Try again: f (fold), c (call/check), r (raise)");
-                    action = Console.ReadLine().Trim().ToLower();
-                }
-
-                playersActed.Add(p);
-
-                if (action == "f")
-                {
-                    Console.WriteLine($"{p.playername} folds.");
-                    players_fold.Add(p);
-                    players_round.Remove(p);
-                    playerBets.Remove(p);
-                    if (currentPlayerIndex >= players_round.Count) currentPlayerIndex = 0;
-                    continue;
-                }
-                else if (action == "c")
-                {
-                    int amountToCall = Math.Min(toCall, p.chips_amount);
-
-                    if (amountToCall < toCall)
-                    {
-                        Console.WriteLine($"{p.playername} goes all-in with {amountToCall} chips.");
-                        p.isAllIn = true;
-                    }
-                    else if (amountToCall > 0)
-                    {
-                        Console.WriteLine($"{p.playername} calls {amountToCall}.");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"{p.playername} checks.");
-                    }
-
-                    p.chips_amount -= amountToCall;
-                    playerBets[p] += amountToCall;
-                    chips_pot += amountToCall;
-                }
-                else if (action == "r")
-                {
-                    Console.WriteLine("Enter total amount to bet (must be more than current to call):");
-                    int raiseTo;
-                    bool validInput = int.TryParse(Console.ReadLine().Trim(), out raiseTo);
-
-                    while (!validInput || raiseTo <= currentBet || raiseTo > p.chips_amount + playerBets[p])
-                    {
-                        Console.WriteLine("Invalid raise. Must be more than current bet and within your chip range.");
-                        validInput = int.TryParse(Console.ReadLine().Trim(), out raiseTo);
-                    }
-
-                    int raiseAmount = raiseTo - playerBets[p];
-                    p.chips_amount -= raiseAmount;
-                    playerBets[p] = raiseTo;
-                    currentBet = raiseTo;
-                    chips_pot += raiseAmount;
-
-                    lastToRaiseIndex = currentPlayerIndex;
-                    playersActed.Clear();
-                    playersActed.Add(p);
-                }
-
-                currentPlayerIndex = (currentPlayerIndex + 1) % players_round.Count;
-
-                bool allMatched = players_round.All(pl =>
-                {
-                    return pl.isAllIn || players_fold.Contains(pl) || playerBets[pl] == currentBet;
-                });
-
-                if (allMatched && players_round.All(pl => playersActed.Contains(pl)))
-                {
-                    bettingComplete = true;
-                }
+                // Deal the turn
+                table.turn = CollectionExtension.Random<Card>(deck.d);
+                await _hubContext.Clients.Group(_tableId).SendAsync(
+                    "ReceiveTableMessage",
+                    "System",
+                    $"Turn: {table.turn.value} of {table.turn.suit}",
+                    DateTime.UtcNow
+                );
+                await ProcessBettingAsync(false);
             }
-        }
-
-
-        // Ends the round: evaluates hands, determines winner(s), distributes chips
-        void end_round()
-        {
-            if (players_round.Count == 1)
+            else if (bettingRound == 3)
             {
-                Console.WriteLine($"{players_round[0].playername} wins the pot uncontested.");
-                players_round[0].chips_amount += chips_pot;
+                // Deal the river
+                table.river = CollectionExtension.Random<Card>(deck.d);
+                await _hubContext.Clients.Group(_tableId).SendAsync(
+                    "ReceiveTableMessage",
+                    "System",
+                    $"River: {table.river.value} of {table.river.suit}",
+                    DateTime.UtcNow
+                );
+                await ProcessBettingAsync(false);
             }
             else
             {
-                // Evaluate hands and get best 5-card hand
-                foreach (Player p in players_round)
+                // Showdown: pick a winner among players who have not folded
+                var contenders = players_round.Where(p => !players_fold.Contains(p)).ToList();
+
+                foreach (var p in contenders)
                 {
-                    var allCards = new List<Card>(table.flop) { table.turn, table.river, p.hand.card_1, p.hand.card_2 };
-                    p.bestHand = PokerHandEvaluator.GetBestFiveCardHand(allCards);
-                    p.playerhandtype = PokerHandEvaluator.EvaluateHand(p.bestHand);
+                    await _hubContext.Clients.Group(_tableId).SendAsync(
+                        "ReceiveTableMessage",
+                        "System",
+                        $"{p.playername} shows {p.hand.card_1.value} of {p.hand.card_1.suit} and {p.hand.card_2.value} of {p.hand.card_2.suit}",
+                        DateTime.UtcNow
+                    );
                 }
 
-                // Determine winner(s)
-                var winners = PokerHandComparer.ComparePlayers(players_round);
+                if (contenders.Count == 1)
+                {
+                    // Only one player left (should be handled earlier, but just in case)
+                    Player winner = contenders[0];
+                    players.First(p => p == winner).chips += pot;
+                    await _hubContext.Clients.Group(_tableId).SendAsync(
+                        "ReceiveTableMessage",
+                        "System",
+                        $"{winner.playername} wins the pot of {pot} chips!",
+                        DateTime.UtcNow
+                    );
+                }
+                else if (contenders.Count > 1)
+                {
+                    // Use the simple evaluator for now
+                    List<Player> winners = EvaluateBestHand(contenders);
+                    if (winners.Count == 1) {
+                        players.First(p => p == winners[0]).chips += pot; 
 
-                if (winners.Count == 1)
-                    Console.WriteLine("Winning player: " + winners[0].playername);
+                        await _hubContext.Clients.Group(_tableId).SendAsync(
+                            "ReceiveTableMessage",
+                            "System",
+                            $"Showdown! {winners[0].playername} wins the pot of {pot} chips.",
+                            DateTime.UtcNow
+                        );
+                    }
+                    else
+                    {
+                        int split = pot / winners.Count;
+                        foreach (Player winner in winners)
+                        {
+                            players.Find(p => p == winner).chips += split;
+                        }
+                        String winners_text = string.Join(", ", winners.Select(p => p.playername));
+                        await _hubContext.Clients.Group(_tableId).SendAsync(
+                            "ReceiveTableMessage",
+                            "System",
+                            $"Showdown! It's a tie between: {winners_text}. Ther pot have been split equally between them, so they each get {split} chips",
+                            DateTime.UtcNow
+                        );
+                    }
+                }
                 else
-                    Console.WriteLine("It's a tie between: " + string.Join(", ", winners.Select(p => p.playername)));
-
-                int split = chips_pot / winners.Count;
-                foreach (Player winner in winners)
                 {
-                    winner.chips_amount += split;
+                    await _hubContext.Clients.Group(_tableId).SendAsync(
+                        "ReceiveTableMessage",
+                        "System",
+                        "No winner could be determined.",
+                        DateTime.UtcNow
+                    );
                 }
+
+                foreach (Player p in players)
+                {
+                    await _hubContext.Clients.Group(_tableId).SendAsync(
+                            "ReceiveTableMessage",
+                            "System",
+                            $"Showdown!  {p.playername} has {p.chips} left.",
+                            DateTime.UtcNow
+                        );
+                }
+                // Reset pot for next hand
+                pot = 0;
+
+                await PlayRoundAsync();
             }
-
-
-
-            // Reset for next round
-            chips_pot = 0;
-            table.flop.Clear();
-            table.turn = null;
-            table.river = null;
-            players_fold.Clear();
-            players_round.Clear();
         }
 
-        // Executes a complete round
-        void play_round()
+        private List<Player> EvaluateBestHand(List<Player> contenders)
         {
-            Start_round();
+            // For each player, find their highest card (hole + community)
+            Player bestPlayer = null;
+            int bestRank = -1;
 
-            if (players_round.Count > 1)
-                flop_round();
+            // Gather all community cards
+            var community = new List<Card>();
+            if (table.flop1 != null) community.Add(table.flop1);
+            if (table.flop2 != null) community.Add(table.flop2);
+            if (table.flop3 != null) community.Add(table.flop3);
+            if (table.turn != null) community.Add(table.turn);
+            if (table.river != null) community.Add(table.river);
 
-            if (players_round.Count > 1)
-                turn_round();
-
-            if (players_round.Count > 1)
-                river_round();
-
-            end_round();
-        }
-
-        // Main method: game testing
-        /*public static void Main()
-        {
-            Gamecontroller game = new("p1", "p2", "p3", "p4");
-
-            while (game.players.Count > 1)
+            foreach (var player in contenders)
             {
-                game.play_round();
-                game.players.RemoveAll(p => p.chips_amount == 0);
+                var allCards = new List<Card> { player.hand.card_1, player.hand.card_2 };
+                allCards.AddRange(community);
+
+                // Find the highest card rank
+                player.handtype = PokerHandEvaluator.EvaluateHand(allCards);
+                player.besthand = PokerHandEvaluator.GetBestFiveCardHand(allCards);
+
             }
 
-            Console.WriteLine("The winner of the room is: " + game.players.First().playername);
-        }*/
-    }
-
-    // Player class represents each participant in the game.
-    internal class Player
-    {
-        internal string playername = "No name";   // The player's name.
-        internal string playerhandtype = "";      // The evaluated hand type (e.g., "Flush", "Full House").
-        internal int chips_amount = 0;            // The number of chips the player currently has.
-        internal Hand hand = new();               // The player's hand (two private cards).
-        internal List<Card> bestHand = new();     // The best 5-card hand for this player after evaluation.
-        internal bool isAllIn = false;            // Bool to check and set if the player is all-in
-
-        // Default constructor.
-        internal Player() { }
-
-        // Constructor that initializes a player with a name and a default chip amount.
-        internal Player(string name)
-        {
-            playername = name;
-            chips_amount = 2000;
-        }
-
-        // Constructor that allows setting a custom starting chip amount.
-        internal Player(string name, int start_chips)
-        {
-            playername = name;
-            chips_amount = start_chips;
-        }
-    }
-
-    // Card class represents an individual playing card.
-    internal class Card
-    {
-        internal string value;   // Card value (e.g., "2", "J", "A").
-        internal string suit;    // Card suit (e.g., "Heart", "Diamond").
-
-        // Default constructor initializes an "empty" card.
-        internal Card()
-        {
-            value = "empty";
-            suit = "empty";
-        }
-
-        // Constructor that sets the card's value and suit.
-        internal Card(string Value, string Suit)
-        {
-            value = Value;
-            suit = Suit;
-        }
-    }
-
-    // Hand class represents the two private cards held by a player.
-    internal class Hand
-    {
-        internal Card card_1 = new();  // First card.
-        internal Card card_2 = new();  // Second card.
-        internal Hand() { }
-    }
-
-    // Table class represents the shared community cards on the table.
-    internal class Table
-    {
-        internal List<Card> flop = new();  // The three flop cards.
-        internal Card turn = new();        // The turn card.
-        internal Card river = new();       // The river card.
-        internal Table() { }
-    }
-
-    // Deck class builds and manages the full 52-card deck.
-    internal class Deck
-    {
-        internal List<Card> deck = new();          // The list of cards currently in the deck.
-        internal List<string> value = new() { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
-        internal List<string> suit = new() { "Heart", "Diamond", "Spade", "club" };
-
-        // Constructor automatically builds the deck.
-        internal Deck() => generateDeck();
-
-        // Generates a standard 52-card deck.
-        public void generateDeck()
-        {
-            deck.Clear();
-            foreach (var s in suit)
-                foreach (var v in value)
-                    deck.Add(new Card(v, s));
+            return PokerHandComparer.ComparePlayers(contenders);
         }
     }
 
@@ -510,16 +515,9 @@ namespace Server
         // Defines the hierarchy of hand strengths from weakest to strongest.
         private static readonly List<string> HandRankings = new()
         {
-            "High Card",
-            "One Pair",
-            "Two Pair",
-            "Three of a Kind",
-            "Straight",
-            "Flush",
-            "Full House",
-            "Four of a Kind",
-            "Straight Flush",
-            "Royal Flush"
+            "High Card", "One Pair", "Two Pair", "Three of a Kind",
+            "Straight", "Flush", "Full House", "Four of a Kind",
+            "Straight Flush", "Royal Flush"
         };
 
         // Compares players' hands and returns a list of the player(s) with the best hand.
@@ -531,8 +529,8 @@ namespace Server
 
             foreach (var player in players)
             {
-                var rank = player.playerhandtype;
-                var hand = player.bestHand;
+                var rank = player.handtype;
+                var hand = player.besthand;
 
                 if (winners.Count == 0 || IsStronger(rank, hand, bestRank, bestHand))
                 {

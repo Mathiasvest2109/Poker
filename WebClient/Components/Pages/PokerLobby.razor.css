@@ -96,6 +96,21 @@
     font-style: italic;
 }
 
+.btn-success {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.btn-success:hover {
+    opacity: 0.9;
+}
+
 .community-cards {
     position: absolute;
     top: 50%;

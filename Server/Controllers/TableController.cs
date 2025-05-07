@@ -36,7 +36,12 @@ public class TableController : ControllerBase
     [HttpPost("actions/raise")]
     public IActionResult raiseAction(string tableId)
     {
-        
+        // Placeholder logic for raising action
+        if (_tableManager.TableExists(tableId))
+        {
+            return Ok(new { success = true, action = "raise" });
+        }
+        return NotFound(new { error = "Table not found" });    
     
     }
 
@@ -44,18 +49,28 @@ public class TableController : ControllerBase
     [HttpPost("actions/call")]
     public IActionResult callAction(string tableId)
     {
-
+        
+        // Placeholder logic for calling action
+        if (_tableManager.TableExists(tableId))
+        {
+            return Ok(new { success = true, action = "call" });
+        }
+        return NotFound(new { error = "Table not found" });
 
     }
 
     //Post: /api/table/actions/fold
     [HttpPost("actions/fold")]
-    public IActionResult raiseAction(string tableId)
+    public IActionResult foldAction(string tableId)
     {
 
+        // Placeholder logic for folding action
+        if (_tableManager.TableExists(tableId))
+        {
+            return Ok(new { success = true, action = "fold" });
+        }
+        return NotFound(new { error = "Table not found" });
 
     }
-
-
 
 }

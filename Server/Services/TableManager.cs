@@ -1,14 +1,20 @@
 namespace Server.Services;
 
+public class TablePlayer
+{
+    public string Name { get; set; }
+    public string ConnectionId { get; set; }
+}
+
 public class TableManager
 {
     private readonly Dictionary<string, string> _connectionToName = new();
-    private readonly Dictionary<string, HashSet<string>> _tables = new();
+    private readonly Dictionary<string, List<TablePlayer>> _tables = new();
 
     public string CreateTable()
     {
         var code = GenerateTableCode();
-        _tables[code] = new HashSet<string>();
+        _tables[code] = new List<TablePlayer>();
         return code;
     }
 
@@ -28,7 +34,8 @@ public class TableManager
         }
 
         _connectionToName[connectionId] = playerName;
-        return players.Add(connectionId); // Returns true if join was successful
+        players.Add(new TablePlayer { ConnectionId = connectionId, Name = playerName });
+        return true; // Returns true if join was successful
     }
 
     public string? GetPlayerName(string connectionId)
@@ -40,12 +47,33 @@ public class TableManager
     {
         if (_tables.TryGetValue(tableId, out var players))
         {
-            players.Remove(connectionId);
+            players.RemoveAll(player => player.ConnectionId == connectionId);
             _connectionToName.Remove(connectionId);
         }
     }
 
     public IEnumerable<string> GetAllTableIds() => _tables.Keys;
+
+    public bool IsHost(string tableId, string connectionId)
+    {
+        if (!_tables.ContainsKey(tableId)) return false;
+
+        // Assume the first player to join is the host
+        return _tables[tableId].FirstOrDefault()?.ConnectionId == connectionId;
+    }
+
+    public List<string> GetPlayersInTable(string tableId)
+    {
+        if (!_tables.ContainsKey(tableId)) return new List<string>();
+        return _tables[tableId].Select(player => player.Name).ToList();
+    }
+
+    public List<TablePlayer> GetTablePlayers(string tableId)
+    {
+        if (_tables.TryGetValue(tableId, out var players))
+            return players;
+        return new List<TablePlayer>();
+    }
 
     private string GenerateTableCode()
     {

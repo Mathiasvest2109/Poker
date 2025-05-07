@@ -3,6 +3,7 @@
 @inject IJSRuntime JS
 @inject HttpClient Http
 @inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Web;
 
 <h1>Poker Lobby</h1>
 
@@ -38,6 +39,54 @@ else
 
 @if (!string.IsNullOrEmpty(nickname))
 {
+    <div class="mt-4">
+        <div class="chat-container">
+            <h4>Chat</h4>
+            <ul id="chatLog">
+                @foreach (var line in chatLog)
+                {
+                    <li>@line</li>
+                }
+            </ul>
+            <input @bind="messageInput"
+                   placeholder="Message"
+                   @onkeydown="HandleChatKeyDown" />
+            <button @onclick="SendMessage">Send</button>
+        </div>
+    </div>
+    <div id="chatScroll" style="height: 150px; width: 350px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: #fff;">
+        @foreach (var (Sender, Message, Timestamp) in chatMessages)
+        {
+            <div>
+                <strong>@Sender</strong>: @Message
+            </div>
+        }
+    </div>
+    <div class="poker-table-container">
+        <div class="poker-table">
+            @for (int i = 0; i < 4; i++)
+            {
+                <div class="player-seat seat-@i">
+                    @if (i < players.Count)
+                    {
+                        <div class="player-card">
+                            <strong>@players[i]</strong>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="empty-seat">Empty</div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+    <div class="player-actions">
+        <button @onclick="@(() => SendPlayerAction("call"))">Call/check</button>
+        <button @onclick="@(() => SendPlayerAction("fold"))">Fold</button>
+        <button @onclick="@(() => SendPlayerAction("raise"))">Raise</button>
+    </div>
+}
 
 <div class="lobby-layout">
   
@@ -99,10 +148,10 @@ else
     </div>
 </div>
 
-
-
+@if (isHost)
+{
+    <button class="btn btn-success" @onclick="StartGame">Start Game</button>
 }
-
 
 @code {
     private string tableId = "";
@@ -112,6 +161,7 @@ else
     private List<string> chatLog = new();
     private string messageInput = "";
     private string warningMessage = "";
+    private bool isHost = false; // Set this based on the player's role
     private string hiddencardFilePath = ""; 
     private List<Card> communityCards = new(); // Shared cards
     private Dictionary<string, List<Card>> playerCards = new(); // Hole cards per player
@@ -227,6 +277,7 @@ private List<string> findCardPath(List<Card> cards){
             tableId = result?.TableId ?? "";
             status = $"Created table: {tableId}";
             joined = true;
+            isHost = true; // Set host flag
         }
         catch
         {
@@ -243,6 +294,7 @@ private List<string> findCardPath(List<Card> cards){
             {
                 status = $"Joined table: {tableId}";
                 joined = true;
+                isHost = false; // Not the host
             }
             else
             {
@@ -272,11 +324,12 @@ private List<string> findCardPath(List<Card> cards){
     }
 
     [JSInvokable]
-    public void ReceiveMessage(string player, string message, DateTime timestamp)
+    public void ReceiveMessage(string player, string message, string timestamp)
     {
         Console.WriteLine($"[DEBUG] JS message: {player}: {message}");
         chatLog.Add($"[{timestamp:HH:mm}] {player}: {message}");
         StateHasChanged();
+        _ = JS.InvokeVoidAsync("scrollChatToBottom");
     }
 
     [JSInvokable]
@@ -287,10 +340,10 @@ private List<string> findCardPath(List<Card> cards){
 
         // Show banner for 3 seconds, then redirect
         StateHasChanged();
+        _ = JS.InvokeVoidAsync("scrollChatToBottom");
         await Task.Delay(3000);
         Nav.NavigateTo("/lobby", forceLoad: true);
     }
-
 
     [JSInvokable]
     public void PlayerJoined(string playerName)
@@ -298,16 +351,33 @@ private List<string> findCardPath(List<Card> cards){
         Console.WriteLine($"[DEBUG] Player joined: {playerName}");
         chatLog.Add($"{playerName} joined the table");
         StateHasChanged();
+        _ = JS.InvokeVoidAsync("scrollChatToBottom");
     }
 
     private async Task SendMessage()
     {
-        if (!string.IsNullOrWhiteSpace(messageInput))
-        {
-            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        await jsModule.InvokeVoidAsync("sendMessage", tableId, nickname, messageInput); // <-- add nickname
+        messageInput = ""; // Clear the input field
+    }
 
-            await jsModule.InvokeVoidAsync("sendMessage", tableId, messageInput);
-            messageInput = "";
+    private async Task StartGame()
+    {
+        var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        await jsModule.InvokeVoidAsync("sendMessage", tableId, "System", "!start"); // <-- use "System"
+    }
+
+    private async Task SendPlayerAction(string action)
+    {
+        var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        await jsModule.InvokeVoidAsync("sendPlayerAction", tableId, nickname, action, 0); // Add raiseAmount if needed
+    }
+
+    private async Task HandleChatKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessage();
         }
     }
 
@@ -336,5 +406,16 @@ private List<string> findCardPath(List<Card> cards){
             new Card("Spades", "13"), // "13" instead of "K"
             new Card("Hearts", "3")
         };
+    }
+
+    private List<(string Sender, string Message, DateTime Timestamp)> chatMessages = new();
+
+    [JSInvokable]
+    public Task AddChatMessage(string sender, string message, DateTime timestamp)
+    {
+        chatMessages.Add((sender, message, timestamp));
+        StateHasChanged();
+        _ = JS.InvokeVoidAsync("scrollChatToBottom");
+        return Task.CompletedTask;
     }
 }
