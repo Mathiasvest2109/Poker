@@ -49,8 +49,8 @@ else
                 }
             </ul>
             <input @bind="messageInput"
-                   placeholder="Message"
-                   @onkeydown="HandleChatKeyDown" />
+            placeholder="Message"
+            @onkeydown="HandleChatKeyDown" />
             <button @onclick="SendMessage">Send</button>
         </div>
     </div>
@@ -85,6 +85,7 @@ else
         <button @onclick="@(() => SendPlayerAction("call"))">Call/check</button>
         <button @onclick="@(() => SendPlayerAction("fold"))">Fold</button>
         <button @onclick="@(() => SendPlayerAction("raise"))">Raise</button>
+        <input @bind="RaiseAmount" placeholder="0" />
     </div>
 }
 
@@ -102,6 +103,7 @@ else
     private string messageInput = "";
     private string warningMessage = "";
     private bool isHost = false; // Set this based on the player's role
+    private string RaiseAmount = "";
 
     private IJSObjectReference? jsModule;
 
@@ -194,6 +196,17 @@ else
         _ = JS.InvokeVoidAsync("scrollChatToBottom");
     }
 
+    private bool DigitsOnly(string s) // Used to make sure raise amount is empty or numbers only
+    {
+        if (s == null || s == "") return true;
+
+        for (int i = 0; i < s.Length; i++)
+            if ((s[i] ^ '0') > 9)
+                return false;
+
+        return true;
+    }
+
     private async Task SendMessage()
     {
         var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
@@ -210,7 +223,19 @@ else
     private async Task SendPlayerAction(string action)
     {
         var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
-        await jsModule.InvokeVoidAsync("sendPlayerAction", tableId, nickname, action, 0); // Add raiseAmount if needed
+        if (DigitsOnly(RaiseAmount))
+        {
+            if(RaiseAmount == "")
+            {
+                await jsModule.InvokeVoidAsync("sendPlayerAction", tableId, nickname, action, 0);
+            }
+            else
+                await jsModule.InvokeVoidAsync("sendPlayerAction", tableId, nickname, action, Convert.ToInt32(RaiseAmount));
+        }
+        else
+        {  
+            
+        }
     }
 
     private async Task HandleChatKeyDown(KeyboardEventArgs e)

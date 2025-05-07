@@ -368,7 +368,7 @@ namespace Server.Services
                     await _hubContext.Clients.Group(_tableId).SendAsync(
                             "ReceiveTableMessage",
                             "System",
-                            $"Showdown!  {p.playername} has {p.chips} left.",
+                            $"{p.playername} has {p.chips} left.",
                             DateTime.UtcNow
                         );
                 }
