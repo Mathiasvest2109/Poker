@@ -90,6 +90,7 @@ namespace Server.Services
         private int smallBlind = 10;
         private int bigBlind = 20;
         private int pot = 0;
+        private readonly Action? terminateCallback;
 
         private static readonly Dictionary<string, int> CardRank = new()
         {
@@ -98,10 +99,11 @@ namespace Server.Services
         };
 
         // Constructor: initializes players and stores SignalR context and table id
-        public Gamecontroller(List<TablePlayer> tablePlayers, IHubContext<PokerHub> hubContext, string tableId)
+        public Gamecontroller(List<TablePlayer> tablePlayers, IHubContext<PokerHub> hubContext, string tableId, Action? termintation)
         {
             _hubContext = hubContext;
             _tableId = tableId;
+            terminateCallback = termintation;
             foreach (var tp in tablePlayers)
                 players.Add(new Player { playername = tp.Name, ConnectionId = tp.ConnectionId });
             players_round = new List<Player>(players);
@@ -175,8 +177,19 @@ namespace Server.Services
                 return;
             }
 
-            // End betting round if all non-folded players have acted
-            if (actedThisRound.Count >= players_round.Count - players_fold.Count)
+            bool bets_equal = true;
+            int bet_check = players_round[0].chips;
+            foreach(Player player in players_round)
+            {
+                if (bet_check != player.chips) 
+                {
+                    bets_equal = false;
+                }
+                bet_check = player.chips;
+            }
+
+            // End betting round if all non-folded players have acted and while all bet amounts are equal
+            if ((actedThisRound.Count >= players_round.Count - players_fold.Count) && bets_equal)
             {
                 await NextBettingRound();
                 return;
@@ -375,8 +388,33 @@ namespace Server.Services
                 // Reset pot for next hand
                 pot = 0;
 
+                // Check if a player has won the game, if so wait for the host to start game again.
+                int p_with_chips = 0;
+                foreach(Player p in players)
+                {
+                    if(p.chips > 0)
+                    {
+                        p_with_chips++;
+                    }
+                }
+                if(p_with_chips == 1)
+                {
+                    await EndGame(players.Find(p => p.chips > 0));
+                }
+
                 await PlayRoundAsync();
             }
+        }
+        private async Task EndGame(Player winner)
+        {
+            await _hubContext.Clients.Group(_tableId).SendAsync(
+                            "ReceiveTableMessage",
+                            "System",
+                            $"{winner.playername} has won the game and a total of {winner.chips} chips.",
+                            DateTime.UtcNow
+                        );
+            terminateCallback?.Invoke();
+            //Task.Delay(2000);
         }
 
         private List<Player> EvaluateBestHand(List<Player> contenders)
