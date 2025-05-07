@@ -45,7 +45,7 @@ public class PokerHub : Hub
                 await Clients.Caller.SendAsync("GameError", "At least 2 players are required to start the game.");
                 return;
             }
-            var game = new Gamecontroller(tablePlayers, _hubContext, tableId);
+            var game = new Gamecontroller(tablePlayers, _hubContext, tableId, () => games.TryRemove(tableId, out _));
             games[tableId] = game;
             await game.PlayRoundAsync();
             return;
