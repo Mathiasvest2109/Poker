@@ -38,28 +38,52 @@ else
 
 @if (!string.IsNullOrEmpty(nickname))
 {
-    <div class="mt-4">
+
+<div class="lobby-layout">
+  
+
+    <div class="chat-container">
         <h4>Chat</h4>
 
-        <ul>
-            @foreach (var line in chatLog)
-            {
-                <li>@line</li>
-            }
-        </ul>
+        <div class="chat-box">
+            <ul>
+                @foreach (var line in chatLog)
+                {
+                    <li>@line</li>
+                }
+            </ul>
+        </div>
 
         <input @bind="messageInput" placeholder="Type message..." />
         <button @onclick="SendMessage">Send</button>
     </div>
-<div class="poker-table-container">
-    <div class="poker-table">
+
+    <div class="poker-table-container">
+        <div class="poker-table">
+               <!-- Shared Cards (Community Cards) -->
+        <div class="community-cards">
+            @foreach (var path in findCardPath(communityCards))
+            {
+                <img src="@path" class="card-img" />
+            }
+        </div>
+
+        <!-- Player Seats -->
         @for (int i = 0; i < 4; i++)
         {
             <div class="player-seat seat-@i">
                 @if (i < players.Count)
                 {
+                    var playerName = players[i];
                     <div class="player-card">
-                        <strong>@players[i]</strong>
+                        <strong>@playerName</strong>
+                        @if (playerCards.TryGetValue(playerName, out var cards))
+                        {
+                            foreach (var path in findCardPath(cards))
+                            {
+                                <img src="@path" class="card-img" />
+                            }
+                        }
                     </div>
                 }
                 else
@@ -68,8 +92,14 @@ else
                 }
             </div>
         }
+
+         
+          
+        </div>
     </div>
 </div>
+
+
 
 }
 
@@ -82,6 +112,105 @@ else
     private List<string> chatLog = new();
     private string messageInput = "";
     private string warningMessage = "";
+    private string hiddencardFilePath = ""; 
+    private List<Card> communityCards = new(); // Shared cards
+    private Dictionary<string, List<Card>> playerCards = new(); // Hole cards per player
+
+    class Card 
+    {
+    public string Suit { get; set; }
+    public string Rank { get; set; }
+
+    public Card() { }
+
+    public Card(string suit, string rank)
+    {
+        Suit = suit;
+        Rank = rank;
+    }
+    }
+private static readonly Dictionary<(string Suit, string Rank), string> CardImageMap = new()
+{
+    // Clubs
+    { ("Clubs", "1"), "Clubs 1.png" },
+    { ("Clubs", "2"), "Clubs 2.png" },
+    { ("Clubs", "3"), "Clubs 3.png" },
+    { ("Clubs", "4"), "Clubs 4.png" },
+    { ("Clubs", "5"), "Clubs 5.png" },
+    { ("Clubs", "6"), "Clubs 6.png" },
+    { ("Clubs", "7"), "Clubs 7.png" },
+    { ("Clubs", "8"), "Clubs 8.png" },
+    { ("Clubs", "9"), "Clubs 9.png" },
+    { ("Clubs", "10"), "Clubs 10.png" },
+    { ("Clubs", "11"), "Clubs 11.png" },
+    { ("Clubs", "12"), "Clubs 12.png" },
+    { ("Clubs", "13"), "Clubs 13.png" },
+
+    // Diamonds
+    { ("Diamonds", "1"), "Diamonds 1.png" },
+    { ("Diamonds", "2"), "Diamonds 2.png" },
+    { ("Diamonds", "3"), "Diamonds 3.png" },
+    { ("Diamonds", "4"), "Diamonds 4.png" },
+    { ("Diamonds", "5"), "Diamonds 5.png" },
+    { ("Diamonds", "6"), "Diamonds 6.png" },
+    { ("Diamonds", "7"), "Diamonds 7.png" },
+    { ("Diamonds", "8"), "Diamonds 8.png" },
+    { ("Diamonds", "9"), "Diamonds 9.png" },
+    { ("Diamonds", "10"), "Diamonds 10.png" },
+    { ("Diamonds", "11"), "Diamonds 11.png" },
+    { ("Diamonds", "12"), "Diamonds 12.png" },
+    { ("Diamonds", "13"), "Diamonds 13.png" },
+
+    // Hearts
+    { ("Hearts", "1"), "Hearts 1.png" },
+    { ("Hearts", "2"), "Hearts 2.png" },
+    { ("Hearts", "3"), "Hearts 3.png" },
+    { ("Hearts", "4"), "Hearts 4.png" },
+    { ("Hearts", "5"), "Hearts 5.png" },
+    { ("Hearts", "6"), "Hearts 6.png" },
+    { ("Hearts", "7"), "Hearts 7.png" },
+    { ("Hearts", "8"), "Hearts 8.png" },
+    { ("Hearts", "9"), "Hearts 9.png" },
+    { ("Hearts", "10"), "Hearts 10.png" },
+    { ("Hearts", "11"), "Hearts 11.png" },
+    { ("Hearts", "12"), "Hearts 12.png" },
+    { ("Hearts", "13"), "Hearts 13.png" },
+
+    // Spades
+    { ("Spades", "1"), "Spades 1.png" },
+    { ("Spades", "2"), "Spades 2.png" },
+    { ("Spades", "3"), "Spades 3.png" },
+    { ("Spades", "4"), "Spades 4.png" },
+    { ("Spades", "5"), "Spades 5.png" },
+    { ("Spades", "6"), "Spades 6.png" },
+    { ("Spades", "7"), "Spades 7.png" },
+    { ("Spades", "8"), "Spades 8.png" },
+    { ("Spades", "9"), "Spades 9.png" },
+    { ("Spades", "10"), "Spades 10.png" },
+    { ("Spades", "11"), "Spades 11.png" },
+    { ("Spades", "12"), "Spades 12.png" },
+    { ("Spades", "13"), "Spades 13.png" },
+};
+
+ 
+ 
+
+private List<string> findCardPath(List<Card> cards){
+    var pathList = new List<string>();
+
+        foreach (var card in cards){
+            var key = (card.Suit,card.Rank);
+
+            if (CardImageMap.TryGetValue(key,out var filename)){
+                pathList.Add($"Sprites/{filename}");
+            }
+        }    
+
+
+
+
+    return pathList;
+    }
 
 
     private IJSObjectReference? jsModule;
@@ -185,5 +314,27 @@ else
     private class CreateTableResponse
     {
         public string TableId { get; set; }
+    }
+
+    protected override void OnInitialized()
+    {
+        communityCards = new List<Card>
+        {
+            new Card("Clubs", "10"),
+            new Card("Hearts", "11"), // Use "11" instead of "J"
+            new Card("Spades", "4")
+        };
+
+        playerCards["Alice"] = new List<Card>
+        {
+            new Card("Diamonds", "9"),
+            new Card("Clubs", "2")
+        };
+
+        playerCards["Bob"] = new List<Card>
+        {
+            new Card("Spades", "13"), // "13" instead of "K"
+            new Card("Hearts", "3")
+        };
     }
 }

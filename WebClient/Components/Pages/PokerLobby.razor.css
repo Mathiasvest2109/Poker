@@ -1,13 +1,48 @@
+.lobby-layout {
+    display: flex;
+   
+    gap: 2rem;
+    align-items: center;
+}
+
+
+
 .poker-table-container {
     display: flex;
     justify-content: center;
     margin-top: 2rem;
 }
 
+
+
+.chat-box {
+    height: 200px;
+    width: 350px;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #ccc;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    margin-bottom: 1rem;
+    border-radius: 5px;
+}
+
+    .chat-box ul {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+    }
+
+    .chat-box li {
+        margin-bottom: 0.25rem;
+        word-wrap: break-word;
+    }
+
+
 .poker-table {
     position: relative;
-    width: 550px;
-    height: 550px;
+    width: 680px;
+    height: 680px;
     background: green;
     border-radius: 50%;
     border: 4px solid #444;
@@ -60,3 +95,16 @@
     color: #ccc;
     font-style: italic;
 }
+
+.community-cards {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+}
+
