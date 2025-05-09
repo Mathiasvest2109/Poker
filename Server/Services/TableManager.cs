@@ -34,8 +34,19 @@ public class TableManager
         }
 
         _connectionToName[connectionId] = playerName;
-        players.Add(new TablePlayer { ConnectionId = connectionId, Name = playerName });
-        return true; // Returns true if join was successful
+
+        // Check if player already exists by name
+        var existing = players.FirstOrDefault(p => p.Name == playerName);
+        if (existing != null)
+        {
+            // Update their ConnectionId to the latest
+            existing.ConnectionId = connectionId;
+        }
+        else
+        {
+            players.Add(new TablePlayer { ConnectionId = connectionId, Name = playerName });
+        }
+        return true;
     }
 
     public string? GetPlayerName(string connectionId)
