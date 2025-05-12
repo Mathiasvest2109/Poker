@@ -132,7 +132,7 @@ namespace Server.Services
 
             await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The game has started!", DateTime.UtcNow);
 
-            /*foreach (var player in players)
+            foreach (var player in players)
             {
                 await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
@@ -140,7 +140,7 @@ namespace Server.Services
                     $"{player.playername} was dealt {player.hand.card_1.value} of {player.hand.card_1.suit} and {player.hand.card_2.value} of {player.hand.card_2.suit}",
                     DateTime.UtcNow
                 );
-            }*/
+            }
 
             foreach (var p in players_round)
             {
@@ -208,8 +208,8 @@ namespace Server.Services
                 bet_check = player.chips;
             }
 
-            // End betting round if all non-folded players have acted, and while there are more then one player and all bet amounts are equal
-            if ((actedThisRound.Count >= players_round.Count - players_fold.Count) && (bets_equal || (players_round.Count <= 1)))
+            // End betting round if all non-folded players have acted and while all bet amounts are equal
+            if ((actedThisRound.Count >= players_round.Count - players_fold.Count) && bets_equal)
             {
                 await NextBettingRound();
                 return;
@@ -241,16 +241,8 @@ namespace Server.Services
             var p = players_round.Find(x => x.playername == playerName);
 
             // Prevent duplicate folds
-            if (action == "fold" && !players_fold.Contains(p)) {
+            if (action == "fold" && !players_fold.Contains(p))
                 players_fold.Add(p);
-                await _hubContext.Clients.Group(_tableId).SendAsync(
-                "ReceiveTableMessage",
-                "System",
-                $"Player {p.playername} has folded.",
-                DateTime.UtcNow
-                );
-
-            }
 
             // Handle call/raise (very basic demo logic)
             if (action == "call")
@@ -260,13 +252,6 @@ namespace Server.Services
                 p.chips -= toCall;
                 pot += toCall;
                 playerBets[p] += toCall;
-                await _hubContext.Clients.Group(_tableId).SendAsync(
-                "ReceiveTableMessage",
-                "System",
-                $"Player {p.playername} has called/checked and the pot is now {pot} chips.",
-                DateTime.UtcNow
-                );
-
             }
             else if (action == "raise")
             {
@@ -277,13 +262,14 @@ namespace Server.Services
                 pot += totalBet;
                 playerBets[p] += totalBet;
                 currentBet += raiseAmount;
-                await _hubContext.Clients.Group(_tableId).SendAsync(
+            }
+
+            await _hubContext.Clients.Group(_tableId).SendAsync(
                 "ReceiveTableMessage",
                 "System",
-                $"Player {p.playername} has raised {raiseAmount} and the pot is now {pot} chips.",
+                $"Pot is now {pot} chips.",
                 DateTime.UtcNow
-                );
-            }
+            );
 
             actedThisRound.Add(playerName);
 
@@ -317,12 +303,12 @@ namespace Server.Services
                 table.flop3 = CollectionExtension.Random<Card>(deck.d);
                 Console.WriteLine($"[DEBUG] flop3: {table.flop3?.value} of {table.flop3?.suit}");
                 await SendCommunityCardsAsync();
-                /*await _hubContext.Clients.Group(_tableId).SendAsync(
+                await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
                     $"Flop: {table.flop1.value} of {table.flop1.suit}, {table.flop2.value} of {table.flop2.suit}, {table.flop3.value} of {table.flop3.suit}",
                     DateTime.UtcNow
-                );*/
+                );
                 await ProcessBettingAsync(false);
             }
             else if (bettingRound == 2)
@@ -331,12 +317,12 @@ namespace Server.Services
                 table.turn = CollectionExtension.Random<Card>(deck.d);
                 Console.WriteLine($"[DEBUG] turn: {table.turn?.value} of {table.turn?.suit}");
                 await SendCommunityCardsAsync();
-                /*await _hubContext.Clients.Group(_tableId).SendAsync(
+                await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
                     $"Turn: {table.turn.value} of {table.turn.suit}",
                     DateTime.UtcNow
-                );*/
+                );
                 await ProcessBettingAsync(false);
             }
             else if (bettingRound == 3)
@@ -345,12 +331,12 @@ namespace Server.Services
                 table.river = CollectionExtension.Random<Card>(deck.d);
                 Console.WriteLine($"[DEBUG] river: {table.river?.value} of {table.river?.suit}");
                 await SendCommunityCardsAsync();
-                /*await _hubContext.Clients.Group(_tableId).SendAsync(
+                await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
                     $"River: {table.river.value} of {table.river.suit}",
                     DateTime.UtcNow
-                );*/
+                );
                 await ProcessBettingAsync(false);
             }
             else
@@ -458,6 +444,7 @@ namespace Server.Services
                             DateTime.UtcNow
                         );
             terminateCallback?.Invoke();
+            //Task.Delay(2000);
         }
 
         private List<Player> EvaluateBestHand(List<Player> contenders)
