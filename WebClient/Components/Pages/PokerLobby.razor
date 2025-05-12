@@ -360,7 +360,7 @@ private List<string> findCardPath(List<Card> cards)
         }
         else
         {  
-            await jsModule.InvokeVoidAsync("sendMessage", tableId, "System", (nickname + " raise amount is only allowed to be numbers"));
+            await jsModule.InvokeVoidAsync("sendMessage", tableId, "System", "Raise amount is only allowed to be numbers");
         }
     }
 
