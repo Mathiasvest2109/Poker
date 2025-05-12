@@ -124,6 +124,12 @@ namespace Server.Services
                 playerBets[p] = 0;
             }
 
+            Console.WriteLine("[DEBUG] Dealt player cards:");
+            foreach (var p in players_round)
+            {
+                Console.WriteLine($"[DEBUG] {p.playername}: {p.hand.card_1.value} of {p.hand.card_1.suit}, {p.hand.card_2.value} of {p.hand.card_2.suit}");
+            }
+
             await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The game has started!", DateTime.UtcNow);
 
             foreach (var player in players)
@@ -133,6 +139,18 @@ namespace Server.Services
                     "System",
                     $"{player.playername} was dealt {player.hand.card_1.value} of {player.hand.card_1.suit} and {player.hand.card_2.value} of {player.hand.card_2.suit}",
                     DateTime.UtcNow
+                );
+            }
+
+            foreach (var p in players_round)
+            {
+                // Send only to the specific player
+                await _hubContext.Clients.Client(p.ConnectionId).SendAsync(
+                    "UpdatePlayerCards",
+                    new[] {
+                        new { Suit = p.hand.card_1.suit, Rank = p.hand.card_1.value },
+                        new { Suit = p.hand.card_2.suit, Rank = p.hand.card_2.value }
+                    }
                 );
             }
 
@@ -169,6 +187,8 @@ namespace Server.Services
         // Prompts the current player for an action (call/fold/raise)
         public async Task ProcessBettingAsync(bool isPreFlop)
         {
+            Console.WriteLine($"[DEBUG] ProcessBettingAsync: actedThisRound.Count={actedThisRound.Count}, players_round.Count={players_round.Count}, players_fold.Count={players_fold.Count}");
+
             // End hand if only one player remains
             if (players_round.Count - players_fold.Count == 1)
             {
@@ -262,6 +282,8 @@ namespace Server.Services
         // Advances to the next betting round or ends the hand
         private async Task NextBettingRound()
         {
+            Console.WriteLine($"[DEBUG] NextBettingRound: bettingRound={bettingRound}");
+
             actedThisRound.Clear();
             currentPlayerIndex = 0;
             bettingRound++;
@@ -275,8 +297,12 @@ namespace Server.Services
             {
                 // Deal the flop
                 table.flop1 = CollectionExtension.Random<Card>(deck.d);
+                Console.WriteLine($"[DEBUG] flop1: {table.flop1?.value} of {table.flop1?.suit}");
                 table.flop2 = CollectionExtension.Random<Card>(deck.d);
+                Console.WriteLine($"[DEBUG] flop2: {table.flop2?.value} of {table.flop2?.suit}");
                 table.flop3 = CollectionExtension.Random<Card>(deck.d);
+                Console.WriteLine($"[DEBUG] flop3: {table.flop3?.value} of {table.flop3?.suit}");
+                await SendCommunityCardsAsync();
                 await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
@@ -289,6 +315,8 @@ namespace Server.Services
             {
                 // Deal the turn
                 table.turn = CollectionExtension.Random<Card>(deck.d);
+                Console.WriteLine($"[DEBUG] turn: {table.turn?.value} of {table.turn?.suit}");
+                await SendCommunityCardsAsync();
                 await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
@@ -301,6 +329,8 @@ namespace Server.Services
             {
                 // Deal the river
                 table.river = CollectionExtension.Random<Card>(deck.d);
+                Console.WriteLine($"[DEBUG] river: {table.river?.value} of {table.river?.suit}");
+                await SendCommunityCardsAsync();
                 await _hubContext.Clients.Group(_tableId).SendAsync(
                     "ReceiveTableMessage",
                     "System",
@@ -443,6 +473,22 @@ namespace Server.Services
             }
 
             return PokerHandComparer.ComparePlayers(contenders);
+        }
+
+        private async Task SendCommunityCardsAsync()
+        {
+            Console.WriteLine("[DEBUG] SendCommunityCardsAsync CALLED");
+
+            var cards = new List<object>();
+            if (table.flop1 != null) cards.Add(new { Suit = table.flop1.suit.ToString(), Rank = table.flop1.value.ToString() });
+            if (table.flop2 != null) cards.Add(new { Suit = table.flop2.suit.ToString(), Rank = table.flop2.value.ToString() });
+            if (table.flop3 != null) cards.Add(new { Suit = table.flop3.suit.ToString(), Rank = table.flop3.value.ToString() });
+            if (table.turn  != null) cards.Add(new { Suit = table.turn.suit.ToString(),  Rank = table.turn.value.ToString() });
+            if (table.river != null) cards.Add(new { Suit = table.river.suit.ToString(), Rank = table.river.value.ToString() });
+
+            Console.WriteLine("[DEBUG] Sending community cards: " + string.Join(", ", cards.Select(c => $"{c}")));
+
+            await _hubContext.Clients.Group(_tableId).SendAsync("UpdateCommunityCards", cards);
         }
     }
 

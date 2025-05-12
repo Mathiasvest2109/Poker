@@ -21,6 +21,15 @@ export async function startConnection(tableId, nickname, dotnetRef, receiveCallb
         dotnetRef.invokeMethodAsync(joinCallback, playerName);
     });
 
+    connection.on("UpdateCommunityCards", function (cards) {
+        console.log("[DEBUG] JS received UpdateCommunityCards:", cards);
+        dotnetRef.invokeMethodAsync('SetCommunityCards', JSON.stringify(cards));
+    });
+
+    connection.on("UpdatePlayerCards", function (cards) {
+        dotnetRef.invokeMethodAsync('SetPlayerCards', JSON.stringify(cards));
+    });
+
     await connection.start();
     await connection.invoke("JoinTable", tableId, nickname);
 }

@@ -4,6 +4,7 @@
 @inject HttpClient Http
 @inject NavigationManager Nav
 @using Microsoft.AspNetCore.Components.Web;
+@using System.Text.Json.Serialization;
 
 <h1>Poker Lobby</h1>
 
@@ -49,8 +50,8 @@ else
                 }
             </ul>
             <input @bind="messageInput"
-            placeholder="Message"
-            @onkeydown="HandleChatKeyDown" />
+                   placeholder="Message"
+                   @onkeydown="HandleChatKeyDown" />
             <button @onclick="SendMessage">Send</button>
         </div>
     </div>
@@ -64,21 +65,22 @@ else
     </div>
     <div class="poker-table-container">
         <div class="poker-table">
-            @for (int i = 0; i < 4; i++)
-            {
-                <div class="player-seat seat-@i">
-                    @if (i < players.Count)
-                    {
-                        <div class="player-card">
-                            <strong>@players[i]</strong>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="empty-seat">Empty</div>
-                    }
-                </div>
-            }
+            <!-- Shared Cards (Community Cards) -->
+            <div class="community-cards">
+                @foreach (var path in findCardPath(communityCards))
+                {
+                    <img src="@path" class="card-img" />
+                }
+            </div>
+
+            <!-- Your own cards -->
+            <div class="my-cards" style="margin-top: 16px;">
+                <strong>Your Cards:</strong>
+                @foreach (var path in findCardPath(myCards))
+                {
+                    <img src="@path" class="card-img" />
+                }
+            </div>
         </div>
     </div>
     <div class="player-actions">
@@ -86,6 +88,20 @@ else
         <button @onclick="@(() => SendPlayerAction("fold"))">Fold</button>
         <button @onclick="@(() => SendPlayerAction("raise"))">Raise</button>
         <input @bind="RaiseAmount" placeholder="0" />
+    </div>
+    <!-- Debug info for myCards and communityCards -->
+    <div>
+        <pre>
+            myCards: @((myCards == null ? "null" : string.Join(", ", myCards.Select(c => $"{c.Suit}-{c.Rank}"))))
+            communityCards: @((communityCards == null ? "null" : string.Join(", ", communityCards.Select(c => $"{c.Suit}-{c.Rank}"))))
+        </pre>
+    </div>
+    <div class="my-cards" style="margin-top: 16px;">
+        <strong>Your Cards:</strong>
+        @foreach (var path in findCardPath(myCards))
+        {
+            <img src="@path" class="card-img" />
+        }
     </div>
 }
 
@@ -103,7 +119,117 @@ else
     private string messageInput = "";
     private string warningMessage = "";
     private bool isHost = false; // Set this based on the player's role
+    private string hiddencardFilePath = ""; 
     private string RaiseAmount = "";
+    private List<Card> communityCards = new(); // Shared cards
+    private List<Card> myCards = new();
+    private Dictionary<string, List<Card>> playerCards = new(); // Hole cards per player
+
+    // For JS interop instance reference
+    private static PokerLobby? _instance;
+
+    public class Card
+    {
+        [JsonPropertyName("suit")]
+        public string Suit { get; set; }
+        [JsonPropertyName("rank")]
+        public string Rank { get; set; }
+    }
+
+private static readonly Dictionary<(string Suit, string Rank), string> CardImageMap = new()
+{
+    // Clubs
+    { ("Clubs", "2"), "Clubs 2.png" },
+    { ("Clubs", "3"), "Clubs 3.png" },
+    { ("Clubs", "4"), "Clubs 4.png" },
+    { ("Clubs", "5"), "Clubs 5.png" },
+    { ("Clubs", "6"), "Clubs 6.png" },
+    { ("Clubs", "7"), "Clubs 7.png" },
+    { ("Clubs", "8"), "Clubs 8.png" },
+    { ("Clubs", "9"), "Clubs 9.png" },
+    { ("Clubs", "10"), "Clubs 10.png" },
+    { ("Clubs", "J"), "Clubs 11.png" },
+    { ("Clubs", "Q"), "Clubs 12.png" },
+    { ("Clubs", "K"), "Clubs 13.png" },
+    { ("Clubs", "A"), "Clubs 1.png" },
+
+    // Diamonds
+    { ("Diamonds", "2"), "Diamonds 2.png" },
+    { ("Diamonds", "3"), "Diamonds 3.png" },
+    { ("Diamonds", "4"), "Diamonds 4.png" },
+    { ("Diamonds", "5"), "Diamonds 5.png" },
+    { ("Diamonds", "6"), "Diamonds 6.png" },
+    { ("Diamonds", "7"), "Diamonds 7.png" },
+    { ("Diamonds", "8"), "Diamonds 8.png" },
+    { ("Diamonds", "9"), "Diamonds 9.png" },
+    { ("Diamonds", "10"), "Diamonds 10.png" },
+    { ("Diamonds", "J"), "Diamonds 11.png" },
+    { ("Diamonds", "Q"), "Diamonds 12.png" },
+    { ("Diamonds", "K"), "Diamonds 13.png" },
+    { ("Diamonds", "A"), "Diamonds 1.png" },
+
+    // Hearts
+    { ("Hearts", "2"), "Hearts 2.png" },
+    { ("Hearts", "3"), "Hearts 3.png" },
+    { ("Hearts", "4"), "Hearts 4.png" },
+    { ("Hearts", "5"), "Hearts 5.png" },
+    { ("Hearts", "6"), "Hearts 6.png" },
+    { ("Hearts", "7"), "Hearts 7.png" },
+    { ("Hearts", "8"), "Hearts 8.png" },
+    { ("Hearts", "9"), "Hearts 9.png" },
+    { ("Hearts", "10"), "Hearts 10.png" },
+    { ("Hearts", "J"), "Hearts 11.png" },
+    { ("Hearts", "Q"), "Hearts 12.png" },
+    { ("Hearts", "K"), "Hearts 13.png" },
+    { ("Hearts", "A"), "Hearts 1.png" },
+
+    // Spades
+    { ("Spades", "2"), "Spades 2.png" },
+    { ("Spades", "3"), "Spades 3.png" },
+    { ("Spades", "4"), "Spades 4.png" },
+    { ("Spades", "5"), "Spades 5.png" },
+    { ("Spades", "6"), "Spades 6.png" },
+    { ("Spades", "7"), "Spades 7.png" },
+    { ("Spades", "8"), "Spades 8.png" },
+    { ("Spades", "9"), "Spades 9.png" },
+    { ("Spades", "10"), "Spades 10.png" },
+    { ("Spades", "J"), "Spades 11.png" },
+    { ("Spades", "Q"), "Spades 12.png" },
+    { ("Spades", "K"), "Spades 13.png" },
+    { ("Spades", "A"), "Spades 1.png" },
+};
+
+// Helper to convert numeric ranks to face card letters for lookup
+private static string ConvertRank(string rank)
+{
+    return rank switch
+    {
+        "11" => "J",
+        "12" => "Q",
+        "13" => "K",
+        "1"  => "A",
+        _    => rank
+    };
+}
+
+private List<string> findCardPath(List<Card> cards)
+{
+    var pathList = new List<string>();
+    Console.WriteLine($"[DEBUG] findCardPath called with: {(cards == null ? "null" : string.Join(", ", cards.Select(c => $"{c.Suit}-{c.Rank}")))}");
+    foreach (var card in cards)
+    {
+        var key = (card.Suit, ConvertRank(card.Rank));
+        if (CardImageMap.TryGetValue(key, out var filename))
+        {
+            pathList.Add($"Sprites/{filename}");
+        }
+        else
+        {
+            Console.WriteLine($"[DEBUG] CardImageMap missing key: {key}");
+        }
+    }
+    return pathList;
+}
 
     private IJSObjectReference? jsModule;
 
@@ -251,6 +377,29 @@ else
         public string TableId { get; set; }
     }
 
+    protected override void OnInitialized()
+    {
+        _instance = this;
+        /*communityCards = new List<Card>
+        {
+            new Card("Clubs", "10"),
+            new Card("Hearts", "J"), // Use "J" instead of "11"
+            new Card("Spades", "4")
+        };
+
+        playerCards["Alice"] = new List<Card>
+        {
+            new Card("Diamonds", "9"),
+            new Card("Clubs", "2")
+        };
+
+        playerCards["Bob"] = new List<Card>
+        {
+            new Card("Spades", "K"), // "K" instead of "13"
+            new Card("Hearts", "3")
+        };*/
+    }
+
     private List<(string Sender, string Message, DateTime Timestamp)> chatMessages = new();
 
     [JSInvokable]
@@ -259,6 +408,44 @@ else
         chatMessages.Add((sender, message, timestamp));
         StateHasChanged();
         _ = JS.InvokeVoidAsync("scrollChatToBottom");
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task SetCommunityCards(string cardsJson)
+    {
+        Console.WriteLine($"[DEBUG] SetCommunityCards received JSON: {cardsJson}");
+
+        var cards = System.Text.Json.JsonSerializer.Deserialize<List<Card>>(cardsJson);
+
+        foreach (var c in cards)
+        {
+            Console.WriteLine($"[DEBUG] CommunityCard: Suit={c.Suit}, RankRaw={c.Rank}, Rank={ConvertRank(c.Rank)}");
+        }
+        communityCards = cards.Select(c => new Card
+        {
+            Suit = c.Suit,
+            Rank = ConvertRank(c.Rank)
+        }).ToList();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task SetPlayerCards(string cardsJson)
+    {
+        Console.WriteLine($"[DEBUG] SetPlayerCards received JSON: {cardsJson}");
+        var cards = System.Text.Json.JsonSerializer.Deserialize<List<Card>>(cardsJson);
+        foreach (var c in cards)
+        {
+            Console.WriteLine($"[DEBUG] PlayerCard: Suit={c.Suit}, RankRaw={c.Rank}, Rank={ConvertRank(c.Rank)}");
+        }
+        myCards = cards.Select(c => new Card
+        {
+            Suit = c.Suit,
+            Rank = ConvertRank(c.Rank)
+        }).ToList();
+        StateHasChanged();
         return Task.CompletedTask;
     }
 }
