@@ -50,8 +50,8 @@ else
                 }
             </ul>
             <input @bind="messageInput"
-                   placeholder="Message"
-                   @onkeydown="HandleChatKeyDown" />
+            placeholder="Message"
+            @onkeydown="HandleChatKeyDown" />
             <button @onclick="SendMessage">Send</button>
         </div>
     </div>
@@ -136,7 +136,7 @@ else
         public string Rank { get; set; }
     }
 
-private static readonly Dictionary<(string Suit, string Rank), string> CardImageMap = new()
+    private static readonly Dictionary<(string Suit, string Rank), string> CardImageMap = new()
 {
     // Clubs
     { ("Clubs", "2"), "Clubs 2.png" },
@@ -199,37 +199,37 @@ private static readonly Dictionary<(string Suit, string Rank), string> CardImage
     { ("Spades", "A"), "Spades 1.png" },
 };
 
-// Helper to convert numeric ranks to face card letters for lookup
-private static string ConvertRank(string rank)
-{
-    return rank switch
+    // Helper to convert numeric ranks to face card letters for lookup
+    private static string ConvertRank(string rank)
     {
-        "11" => "J",
-        "12" => "Q",
-        "13" => "K",
-        "1"  => "A",
-        _    => rank
-    };
-}
-
-private List<string> findCardPath(List<Card> cards)
-{
-    var pathList = new List<string>();
-    Console.WriteLine($"[DEBUG] findCardPath called with: {(cards == null ? "null" : string.Join(", ", cards.Select(c => $"{c.Suit}-{c.Rank}")))}");
-    foreach (var card in cards)
-    {
-        var key = (card.Suit, ConvertRank(card.Rank));
-        if (CardImageMap.TryGetValue(key, out var filename))
+        return rank switch
         {
-            pathList.Add($"Sprites/{filename}");
-        }
-        else
-        {
-            Console.WriteLine($"[DEBUG] CardImageMap missing key: {key}");
-        }
+            "11" => "J",
+            "12" => "Q",
+            "13" => "K",
+            "1"  => "A",
+            _    => rank
+        };
     }
-    return pathList;
-}
+
+    private List<string> findCardPath(List<Card> cards)
+    {
+        var pathList = new List<string>();
+        Console.WriteLine($"[DEBUG] findCardPath called with: {(cards == null ? "null" : string.Join(", ", cards.Select(c => $"{c.Suit}-{c.Rank}")))}");
+        foreach (var card in cards)
+        {
+            var key = (card.Suit, ConvertRank(card.Rank));
+            if (CardImageMap.TryGetValue(key, out var filename))
+            {
+                pathList.Add($"Sprites/{filename}");
+            }
+            else
+            {
+                Console.WriteLine($"[DEBUG] CardImageMap missing key: {key}");
+            }
+        }
+        return pathList;
+    }
 
     private IJSObjectReference? jsModule;
 
@@ -359,8 +359,9 @@ private List<string> findCardPath(List<Card> cards)
                 await jsModule.InvokeVoidAsync("sendPlayerAction", tableId, nickname, action, Convert.ToInt32(RaiseAmount));
         }
         else
-        {  
-            await jsModule.InvokeVoidAsync("sendMessage", tableId, "System", "Raise amount is only allowed to be numbers");
+        {
+            string onlynumbers = nickname + " raise amount is only allowed to be numbers";
+            await jsModule.InvokeVoidAsync("sendMessage", tableId, "System", onlynumbers);
         }
     }
 
