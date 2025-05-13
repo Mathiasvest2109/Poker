@@ -141,7 +141,6 @@ else
 @if (isHost)
 {
     <button class="btn btn-success" @onclick="StartGame">Start Game</button>
-    <button class="btn btn-primary" @onclick="PlayAgain">Play Again</button>
 }
 
 @code {
@@ -419,12 +418,6 @@ else
         {
             await SendMessage();
         }
-    }
-
-    private async Task PlayAgain()
-    {
-        var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
-        await jsModule.InvokeVoidAsync("playAgain", tableId);
     }
 
     private class CreateTableResponse

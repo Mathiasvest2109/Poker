@@ -56,6 +56,7 @@ namespace Server.Services
         public int chips = 1000; // Starting chips
         internal string handtype;
         internal List<Card> besthand;
+        internal bool allin = false;
     }
 
     // Represents a player's hand (two cards)
@@ -112,8 +113,15 @@ namespace Server.Services
         // Starts a new round: deals cards, notifies players, and begins betting
         public async Task PlayRoundAsync()
         {
-            deck = new Deck(); // Reset deck with 52 cards
+            deck = new Deck(); // Reset deck
             players_round = new List<Player>(players);
+            players_fold.Clear();
+            table = new Table();
+            bettingRound = 0;
+            actedThisRound.Clear();
+            currentBet = 0;
+            playerBets = new Dictionary<Player, int>();
+            pot = 0;
             foreach (var p in players_round)
             {
                 p.hand = new Hand
@@ -171,80 +179,9 @@ namespace Server.Services
                 DateTime.UtcNow
             );
 
-            bettingRound = 0;
-            actedThisRound.Clear();
-            currentPlayerIndex = 0;
             await BroadcastWalletsAndPotAsync();
             await ProcessBettingAsync(true);
 
-        }
-
-        public async Task DealNewHandAsync()
-        {
-            deck = new Deck(); // Reset deck
-            players_round = new List<Player>(players);
-            players_fold.Clear();
-            table = new Table();
-            bettingRound = 0;
-            actedThisRound.Clear();
-            currentBet = 0;
-            playerBets = new Dictionary<Player, int>();
-            pot = 0;
-
-            foreach (var p in players_round)
-            {
-                p.hand = new Hand
-                {
-                    card_1 = CollectionExtension.Random<Card>(deck.d),
-                    card_2 = CollectionExtension.Random<Card>(deck.d)
-                };
-                playerBets[p] = 0;
-            }
-
-            Console.WriteLine("[DEBUG] Dealt player cards (Play Again):");
-            foreach (var p in players_round)
-            {
-                Console.WriteLine($"[DEBUG] {p.playername}: {p.hand.card_1.value} of {p.hand.card_1.suit}, {p.hand.card_2.value} of {p.hand.card_2.suit}");
-            }
-
-            await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "A new hand has started!", DateTime.UtcNow);
-            await _hubContext.Clients.Group(_tableId).SendAsync("NewRoundStarted");
-            await _hubContext.Clients.Group(_tableId).SendAsync("UpdateCommunityCards", new List<object>());
-
-            foreach (var p in players_round)
-            {
-                await _hubContext.Clients.Client(p.ConnectionId).SendAsync(
-                    "UpdatePlayerCards",
-                    new[] {
-                        new { Suit = p.hand.card_1.suit, Rank = p.hand.card_1.value },
-                        new { Suit = p.hand.card_2.suit, Rank = p.hand.card_2.value }
-                    }
-                );
-            }
-
-            // Keep dealer/blind rotation as you wish, or reset if needed
-            dealerIndex = (dealerIndex + 1) % players.Count;
-            int smallBlindIndex = (dealerIndex + 1) % players_round.Count;
-            int bigBlindIndex = (dealerIndex + 2) % players_round.Count;
-
-            Player smallBlindPlayer = players_round[smallBlindIndex];
-            Player bigBlindPlayer = players_round[bigBlindIndex];
-
-            smallBlindPlayer.chips -= smallBlind;
-            bigBlindPlayer.chips -= bigBlind;
-            playerBets[smallBlindPlayer] = smallBlind;
-            playerBets[bigBlindPlayer] = bigBlind;
-            currentBet = bigBlind;
-            pot += smallBlind + bigBlind;
-
-            await _hubContext.Clients.Group(_tableId).SendAsync(
-                "ReceiveTableMessage", "System",
-                $"{smallBlindPlayer.playername} posts small blind ({smallBlind}), {bigBlindPlayer.playername} posts big blind ({bigBlind})",
-                DateTime.UtcNow
-            );
-
-            await BroadcastWalletsAndPotAsync();
-            await ProcessBettingAsync(true);
         }
 
         // Prompts the current player for an action (call/fold/raise)
@@ -256,7 +193,8 @@ namespace Server.Services
             if (players_round.Count - players_fold.Count == 1)
             {
                 var winner = players_round.First(p => !players_fold.Contains(p));
-                await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", $"{winner.playername} wins the hand!", DateTime.UtcNow);
+                bettingRound = 4;
+                await NextBettingRound();
                 return;
             }
 
@@ -267,7 +205,7 @@ namespace Server.Services
                 if (players_fold.Contains(player)) continue;
                 if (bet_check == null)
                     bet_check = playerBets[player];
-                else if (playerBets[player] != bet_check)
+                else if (playerBets[player] != bet_check && !player.allin)
                     bets_equal = false;
             }
 
@@ -278,6 +216,7 @@ namespace Server.Services
                 return;
             }
 
+            /*
             // Find the next player who hasn't folded and hasn't acted
             Player p = null;
             int startIdx = currentPlayerIndex;
@@ -296,6 +235,7 @@ namespace Server.Services
             int toCall = currentBet - playerBets[p];
             await _hubContext.Clients.Client(p.ConnectionId)
                 .SendAsync("PromptPlayerAction", p.playername, toCall, currentBet);
+            */
         }
 
         // Handles a player's action and advances the betting round
@@ -314,10 +254,14 @@ namespace Server.Services
                 DateTime.UtcNow
                 );
             }
-            else if (action == "call")
+            else if (action == "call") // All-in protection
             {
                 int toCall = currentBet - playerBets[p];
-                if (toCall > p.chips) toCall = p.chips; // All-in protection
+                if (toCall > p.chips)
+                {
+                    p.allin = true;
+                    toCall = p.chips; // All-in protection
+                }
                 p.chips -= toCall;
                 pot += toCall;
                 playerBets[p] += toCall;
@@ -333,7 +277,11 @@ namespace Server.Services
             {
                 int toCall = currentBet - playerBets[p];
                 int totalBet = toCall + raiseAmount;
-                if (totalBet > p.chips) totalBet = p.chips; // All-in protection
+                if (totalBet > p.chips) // All-in protection
+                {
+                    p.allin = true;
+                    totalBet = p.chips;
+                }
                 p.chips -= totalBet;
                 pot += totalBet;
                 playerBets[p] += totalBet;
@@ -519,8 +467,8 @@ namespace Server.Services
                     await EndGame(players.Find(p => p.chips > 0));
                 }
 
-                //await PlayRoundAsync();
-                await DealNewHandAsync();
+                await PlayRoundAsync();
+                //await DealNewHandAsync();
             }
         }
         private async Task EndGame(Player winner)

@@ -74,12 +74,6 @@ export async function sendPlayerAction(tableId, playerName, action, raiseAmount 
     }
 }
 
-export function playAgain(tableId) {
-    if (connection) {
-        connection.invoke("PlayAgain", tableId);
-    }
-}
-
 window.scrollChatToBottom = function () {
     var chatDiv = document.getElementById('chatScroll');
     if (chatDiv) {

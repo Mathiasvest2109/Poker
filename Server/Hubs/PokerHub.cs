@@ -70,12 +70,6 @@ public class PokerHub : Hub
         await Clients.Group(tableId).SendAsync("UpdatePot", pot);
     }
 
-    public async Task PlayAgain(string tableId)
-    {
-        if (!games.TryGetValue(tableId, out var game)) return;
-        await game.DealNewHandAsync();
-    }
-
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         foreach (var tableId in _tableManager.GetAllTableIds())
