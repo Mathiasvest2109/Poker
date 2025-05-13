@@ -30,6 +30,14 @@ export async function startConnection(tableId, nickname, dotnetRef, receiveCallb
         dotnetRef.invokeMethodAsync('SetPlayerCards', JSON.stringify(cards));
     });
 
+    connection.on("UpdateGameWinRatio", (Won) => {
+        dotnetRef.invokeMethodAsync('SetGameWinRatio', Won);
+    });
+
+    connection.on("UpdateHandWinRatio", (Won) => {
+        dotnetRef.invokeMethodAsync('SetHandWinRatio', Won);
+    });
+
     await connection.start();
     await connection.invoke("JoinTable", tableId, nickname);
 }
@@ -45,6 +53,7 @@ export async function sendPlayerAction(tableId, playerName, action, raiseAmount 
         await connection.invoke("PlayerAction", tableId, playerName, action, raiseAmount);
     }
 }
+
 
 window.scrollChatToBottom = function () {
     var chatDiv = document.getElementById('chatScroll');

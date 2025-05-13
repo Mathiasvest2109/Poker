@@ -130,7 +130,7 @@ namespace Server.Services
                 Console.WriteLine($"[DEBUG] {p.playername}: {p.hand.card_1.value} of {p.hand.card_1.suit}, {p.hand.card_2.value} of {p.hand.card_2.suit}");
             }
 
-            await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The game has started!", DateTime.UtcNow);
+            await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The hand has started!", DateTime.UtcNow);
 
             /*foreach (var player in players)
             {
@@ -358,6 +358,15 @@ namespace Server.Services
                         $"{winner.playername} wins the pot of {pot} chips!",
                         DateTime.UtcNow
                     );
+                    foreach (var p in players)
+                    {
+                        // Send only to the specific player
+                        if p.Equals(winner)
+                                await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
+                        else
+                            await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
+
+                    }
                 }
                 else if (contenders.Count > 1)
                 {
@@ -372,6 +381,15 @@ namespace Server.Services
                             $"Showdown! {winners[0].playername} wins the pot of {pot} chips.",
                             DateTime.UtcNow
                         );
+                        foreach (var p in players)
+                        {
+                            // Send only to the specific player
+                            if p.Equals(winners[0])
+                                await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
+                            else
+                                await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
+
+                        }
                     }
                     else
                     {
@@ -387,6 +405,15 @@ namespace Server.Services
                             $"Showdown! It's a tie between: {winners_text}. Ther pot have been split equally between them, so they each get {split} chips",
                             DateTime.UtcNow
                         );
+                        foreach (var p in players)
+                        {
+                            // Send only to the specific player
+                            if winners.Contains(p)
+                                await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
+                            else
+                                await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
+
+                        }
                     }
                 }
                 else
@@ -397,6 +424,12 @@ namespace Server.Services
                         "No winner could be determined.",
                         DateTime.UtcNow
                     );
+                    foreach (var p in players)
+                    {
+                        // Send only to the specific player
+                        await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
+
+                    }
                 }
 
                 foreach (Player p in players)
@@ -436,7 +469,20 @@ namespace Server.Services
                             $"{winner.playername} has won the game and a total of {winner.chips} chips.",
                             DateTime.UtcNow
                         );
+
+            foreach (var p in players)
+            {
+                // Send only to the specific player
+                if p.Equals(winner)
+                    await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateGameWinRatio", true);
+                else
+                    await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateGameWinRatio", false);
+
+            }
+
             terminateCallback?.Invoke();
+
+
             //Task.Delay(2000);
         }
 

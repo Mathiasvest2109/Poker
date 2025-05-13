@@ -124,6 +124,12 @@ else
     private List<Card> communityCards = new(); // Shared cards
     private List<Card> myCards = new();
     private Dictionary<string, List<Card>> playerCards = new(); // Hole cards per player
+    private double gamesWinRation = 0;
+    private double gamesWon = 0;
+    private double gamesPlayed = 0;
+    private double handsWinRation = 0;
+    private double handsWon = 0;
+    private double handsPlayed = 0;
 
     // For JS interop instance reference
     private static PokerLobby? _instance;
@@ -447,6 +453,30 @@ else
             Rank = ConvertRank(c.Rank)
         }).ToList();
         StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task SetGameWinRatio(bool Won)
+    {
+        Console.WriteLine($"[DEBUG] SetGaneWinRatio received Winner?: {Won}");
+        if (Won)
+        {
+            gamesWon++;
+        }
+        gamesWinRation = gamesWon / gamesPlayed;
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task SetHandWinRatio(bool Won)
+    {
+        Console.WriteLine($"[DEBUG] SetHandWinRatio received Winner?: {Won}");
+        if (Won)
+        {
+            handsWon++;
+        }
+        handsWinRation = handsWon / handsPlayed;
         return Task.CompletedTask;
     }
 }
