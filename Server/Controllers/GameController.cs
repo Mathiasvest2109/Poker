@@ -131,16 +131,10 @@ namespace Server.Services
             }
 
             await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The hand has started!", DateTime.UtcNow);
+            await _hubContext.Clients.Group(_tableId).SendAsync("NewRoundStarted");
 
-            /*foreach (var player in players)
-            {
-                await _hubContext.Clients.Group(_tableId).SendAsync(
-                    "ReceiveTableMessage",
-                    "System",
-                    $"{player.playername} was dealt {player.hand.card_1.value} of {player.hand.card_1.suit} and {player.hand.card_2.value} of {player.hand.card_2.suit}",
-                    DateTime.UtcNow
-                );
-            }*/
+            // Clear community cards for all clients
+            await _hubContext.Clients.Group(_tableId).SendAsync("UpdateCommunityCards", new List<object>());
 
             foreach (var p in players_round)
             {
@@ -180,8 +174,77 @@ namespace Server.Services
             bettingRound = 0;
             actedThisRound.Clear();
             currentPlayerIndex = 0;
+            await BroadcastWalletsAndPotAsync();
             await ProcessBettingAsync(true);
 
+        }
+
+        public async Task DealNewHandAsync()
+        {
+            deck = new Deck(); // Reset deck
+            players_round = new List<Player>(players);
+            players_fold.Clear();
+            table = new Table();
+            bettingRound = 0;
+            actedThisRound.Clear();
+            currentBet = 0;
+            playerBets = new Dictionary<Player, int>();
+            pot = 0;
+
+            foreach (var p in players_round)
+            {
+                p.hand = new Hand
+                {
+                    card_1 = CollectionExtension.Random<Card>(deck.d),
+                    card_2 = CollectionExtension.Random<Card>(deck.d)
+                };
+                playerBets[p] = 0;
+            }
+
+            Console.WriteLine("[DEBUG] Dealt player cards (Play Again):");
+            foreach (var p in players_round)
+            {
+                Console.WriteLine($"[DEBUG] {p.playername}: {p.hand.card_1.value} of {p.hand.card_1.suit}, {p.hand.card_2.value} of {p.hand.card_2.suit}");
+            }
+
+            await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "A new hand has started!", DateTime.UtcNow);
+            await _hubContext.Clients.Group(_tableId).SendAsync("NewRoundStarted");
+            await _hubContext.Clients.Group(_tableId).SendAsync("UpdateCommunityCards", new List<object>());
+
+            foreach (var p in players_round)
+            {
+                await _hubContext.Clients.Client(p.ConnectionId).SendAsync(
+                    "UpdatePlayerCards",
+                    new[] {
+                        new { Suit = p.hand.card_1.suit, Rank = p.hand.card_1.value },
+                        new { Suit = p.hand.card_2.suit, Rank = p.hand.card_2.value }
+                    }
+                );
+            }
+
+            // Keep dealer/blind rotation as you wish, or reset if needed
+            dealerIndex = (dealerIndex + 1) % players.Count;
+            int smallBlindIndex = (dealerIndex + 1) % players_round.Count;
+            int bigBlindIndex = (dealerIndex + 2) % players_round.Count;
+
+            Player smallBlindPlayer = players_round[smallBlindIndex];
+            Player bigBlindPlayer = players_round[bigBlindIndex];
+
+            smallBlindPlayer.chips -= smallBlind;
+            bigBlindPlayer.chips -= bigBlind;
+            playerBets[smallBlindPlayer] = smallBlind;
+            playerBets[bigBlindPlayer] = bigBlind;
+            currentBet = bigBlind;
+            pot += smallBlind + bigBlind;
+
+            await _hubContext.Clients.Group(_tableId).SendAsync(
+                "ReceiveTableMessage", "System",
+                $"{smallBlindPlayer.playername} posts small blind ({smallBlind}), {bigBlindPlayer.playername} posts big blind ({bigBlind})",
+                DateTime.UtcNow
+            );
+
+            await BroadcastWalletsAndPotAsync();
+            await ProcessBettingAsync(true);
         }
 
         // Prompts the current player for an action (call/fold/raise)
@@ -198,14 +261,14 @@ namespace Server.Services
             }
 
             bool bets_equal = true;
-            int bet_check = players_round[0].chips;
-            foreach(Player player in players_round)
+            int? bet_check = null;
+            foreach (var player in players_round)
             {
-                if (bet_check != player.chips) 
-                {
+                if (players_fold.Contains(player)) continue;
+                if (bet_check == null)
+                    bet_check = playerBets[player];
+                else if (playerBets[player] != bet_check)
                     bets_equal = false;
-                }
-                bet_check = player.chips;
             }
 
             // End betting round if all non-folded players have acted and while all bet amounts are equal
@@ -349,6 +412,8 @@ namespace Server.Services
                     );
                 }
 
+                await BroadcastShowdownAsync();
+
                 if (contenders.Count == 1)
                 {
                     // Only one player left (should be handled earlier, but just in case)
@@ -456,7 +521,7 @@ namespace Server.Services
                     await EndGame(players.Find(p => p.chips > 0));
                 }
 
-                await PlayRoundAsync();
+                //await PlayRoundAsync();
             }
         }
         private async Task EndGame(Player winner)
@@ -532,6 +597,20 @@ namespace Server.Services
             var wallets = players.ToDictionary(p => p.playername, p => p.chips);
             await _hubContext.Clients.Group(_tableId).SendAsync("UpdateWallets", wallets);
             await _hubContext.Clients.Group(_tableId).SendAsync("UpdatePot", pot);
+        }
+
+        private async Task BroadcastShowdownAsync()
+        {
+            // Build a dictionary: player name -> list of cards (e.g., ["Hearts-2", "Spades-K"])
+            var hands = players.ToDictionary(
+                p => p.playername,
+                p => new List<string>
+                {
+                    $"{p.hand.card_1.suit}-{p.hand.card_1.value}",
+                    $"{p.hand.card_2.suit}-{p.hand.card_2.value}"
+                }
+            );
+            await _hubContext.Clients.Group(_tableId).SendAsync("ShowdownHands", hands);
         }
     }
 

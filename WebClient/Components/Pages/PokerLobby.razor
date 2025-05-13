@@ -85,6 +85,20 @@ else
                                     <img src="@path" class="card-img" />
                                 }
                             }
+                            else if (showdownHands.TryGetValue(player, out var showdownCardStrings))
+                            {
+                                // Convert showdown card strings to Card objects and use findCardPath
+                                var showdownCards = showdownCardStrings.Select(cardStr =>
+                                {
+                                    var parts = cardStr.Split('-');
+                                    return new Card { Suit = parts[0], Rank = parts[1] };
+                                }).ToList();
+
+                                foreach (var path in findCardPath(showdownCards))
+                                {
+                                    <img src="@path" class="card-img" />
+                                }
+                            }
                             else
                             {
                                 <img src="@CardBackPath" class="card-img" />
@@ -127,6 +141,7 @@ else
 @if (isHost)
 {
     <button class="btn btn-success" @onclick="StartGame">Start Game</button>
+    <button class="btn btn-primary" @onclick="PlayAgain">Play Again</button>
 }
 
 @code {
@@ -153,6 +168,7 @@ else
     private const string CardBackPath = "Sprites/Card Back 1.png";
     private Dictionary<string, int> playerWallets = new();
     private int tablePot = 0;
+    private Dictionary<string, List<string>> showdownHands = new();
 
     // For JS interop instance reference
     private static PokerLobby? _instance;
@@ -405,6 +421,12 @@ else
         }
     }
 
+    private async Task PlayAgain()
+    {
+        var jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
+        await jsModule.InvokeVoidAsync("playAgain", tableId);
+    }
+
     private class CreateTableResponse
     {
         public string TableId { get; set; }
@@ -524,6 +546,20 @@ else
     public void SetTablePot(int pot)
     {
         tablePot = pot;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void ShowdownHands(Dictionary<string, List<string>> hands)
+    {
+        showdownHands = hands;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void ClearShowdownHands()
+    {
+        showdownHands.Clear();
         StateHasChanged();
     }
 }
