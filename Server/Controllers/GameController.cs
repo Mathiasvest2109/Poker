@@ -130,7 +130,7 @@ namespace Server.Services
                 Console.WriteLine($"[DEBUG] {p.playername}: {p.hand.card_1.value} of {p.hand.card_1.suit}, {p.hand.card_2.value} of {p.hand.card_2.suit}");
             }
 
-            await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The hand has started!", DateTime.UtcNow);
+            //await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The hand has started!", DateTime.UtcNow);
             await _hubContext.Clients.Group(_tableId).SendAsync("NewRoundStarted");
 
             // Clear community cards for all clients
@@ -504,8 +504,6 @@ namespace Server.Services
                             DateTime.UtcNow
                         );
                 }
-                // Reset pot for next hand
-                pot = 0;
 
                 // Check if a player has won the game, if so wait for the host to start game again.
                 int p_with_chips = 0;
@@ -522,6 +520,7 @@ namespace Server.Services
                 }
 
                 //await PlayRoundAsync();
+                await DealNewHandAsync();
             }
         }
         private async Task EndGame(Player winner)
@@ -544,8 +543,6 @@ namespace Server.Services
 
             terminateCallback?.Invoke();
 
-
-            //Task.Delay(2000);
         }
 
         private List<Player> EvaluateBestHand(List<Player> contenders)
