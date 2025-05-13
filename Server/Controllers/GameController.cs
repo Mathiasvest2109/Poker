@@ -264,6 +264,7 @@ namespace Server.Services
                 $"Player {p.playername} called/checked, the pot is  now {pot}.",
                 DateTime.UtcNow
                 );
+                await BroadcastWalletsAndPotAsync();
             }
             else if (action == "raise")
             {
@@ -280,6 +281,7 @@ namespace Server.Services
                 $"Player {p.playername} raised {raiseAmount}, the pot is  now {pot}.",
                 DateTime.UtcNow
                 );
+                await BroadcastWalletsAndPotAsync();
             }
 
             actedThisRound.Add(playerName);
@@ -361,11 +363,10 @@ namespace Server.Services
                     foreach (var p in players)
                     {
                         // Send only to the specific player
-                        if p.Equals(winner)
-                                await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
+                        if (p.Equals(winner))
+                            await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                         else
                             await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
-
                     }
                 }
                 else if (contenders.Count > 1)
@@ -384,11 +385,10 @@ namespace Server.Services
                         foreach (var p in players)
                         {
                             // Send only to the specific player
-                            if p.Equals(winners[0])
+                            if (p.Equals(winners[0]))
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                             else
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
-
                         }
                     }
                     else
@@ -408,11 +408,10 @@ namespace Server.Services
                         foreach (var p in players)
                         {
                             // Send only to the specific player
-                            if winners.Contains(p)
+                            if (winners.Contains(p))
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                             else
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
-
                         }
                     }
                 }
@@ -428,7 +427,6 @@ namespace Server.Services
                     {
                         // Send only to the specific player
                         await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
-
                     }
                 }
 
@@ -473,11 +471,10 @@ namespace Server.Services
             foreach (var p in players)
             {
                 // Send only to the specific player
-                if p.Equals(winner)
+                if (p.Equals(winner))
                     await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateGameWinRatio", true);
                 else
                     await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateGameWinRatio", false);
-
             }
 
             terminateCallback?.Invoke();
@@ -528,6 +525,13 @@ namespace Server.Services
             Console.WriteLine("[DEBUG] Sending community cards: " + string.Join(", ", cards.Select(c => $"{c}")));
 
             await _hubContext.Clients.Group(_tableId).SendAsync("UpdateCommunityCards", cards);
+        }
+
+        private async Task BroadcastWalletsAndPotAsync()
+        {
+            var wallets = players.ToDictionary(p => p.playername, p => p.chips);
+            await _hubContext.Clients.Group(_tableId).SendAsync("UpdateWallets", wallets);
+            await _hubContext.Clients.Group(_tableId).SendAsync("UpdatePot", pot);
         }
     }
 

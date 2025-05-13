@@ -20,14 +20,20 @@ public class PokerHub : Hub
     public async Task JoinTable(string tableId, string playerName)
     {
         var connectionId = Context.ConnectionId;
-        var joined = _tableManager.TryJoinTable(tableId, connectionId, playerName); // Store both!
+        var joined = _tableManager.TryJoinTable(tableId, connectionId, playerName);
         if (!joined)
         {
             await Clients.Caller.SendAsync("TableJoinFailed", tableId, "Table is full or does not exist.");
             return;
         }
         await Groups.AddToGroupAsync(connectionId, tableId);
+
+        // 1. Notify all clients that a player joined (already present)
         await Clients.Group(tableId).SendAsync("PlayerJoined", playerName);
+
+        // 2. Send the full player list to the newly joined client
+        var allPlayers = _tableManager.GetTablePlayers(tableId).Select(p => p.Name).ToList();
+        await Clients.Caller.SendAsync("PlayerList", allPlayers);
     }
 
     public async Task SendMessage(string tableId, string sender, string message)
@@ -57,6 +63,11 @@ public class PokerHub : Hub
     {
         if (!games.TryGetValue(tableId, out var game)) return;
         await game.HandlePlayerActionAsync(playerName, action, raiseAmount);
+    }
+
+    public async Task UpdatePot(string tableId, int pot)
+    {
+        await Clients.Group(tableId).SendAsync("UpdatePot", pot);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

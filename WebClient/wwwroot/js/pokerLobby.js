@@ -38,6 +38,18 @@ export async function startConnection(tableId, nickname, dotnetRef, receiveCallb
         dotnetRef.invokeMethodAsync('SetHandWinRatio', Won);
     });
 
+    connection.on("PlayerList", function (playerList) {
+        dotnetRef.invokeMethodAsync('SetPlayerList', playerList);
+    });
+
+    connection.on("UpdateWallets", function (wallets) {
+        dotnetRef.invokeMethodAsync('SetPlayerWallets', wallets);
+    });
+
+    connection.on("UpdatePot", function (pot) {
+        dotnetRef.invokeMethodAsync('SetTablePot', pot);
+    });
+
     await connection.start();
     await connection.invoke("JoinTable", tableId, nickname);
 }
