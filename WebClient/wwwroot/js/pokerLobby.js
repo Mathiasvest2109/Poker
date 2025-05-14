@@ -38,6 +38,26 @@ export async function startConnection(tableId, nickname, dotnetRef, receiveCallb
         dotnetRef.invokeMethodAsync('SetHandWinRatio', Won);
     });
 
+    connection.on("PlayerList", function (playerList) {
+        dotnetRef.invokeMethodAsync('SetPlayerList', playerList);
+    });
+
+    connection.on("UpdateWallets", function (wallets) {
+        dotnetRef.invokeMethodAsync('SetPlayerWallets', wallets);
+    });
+
+    connection.on("UpdatePot", function (pot) {
+        dotnetRef.invokeMethodAsync('SetTablePot', pot);
+    });
+
+    connection.on("ShowdownHands", function (hands) {
+        dotnetRef.invokeMethodAsync('ShowdownHands', hands);
+    });
+
+    connection.on("NewRoundStarted", function () {
+        dotnetRef.invokeMethodAsync('ClearShowdownHands');
+    });
+
     await connection.start();
     await connection.invoke("JoinTable", tableId, nickname);
 }
@@ -53,7 +73,6 @@ export async function sendPlayerAction(tableId, playerName, action, raiseAmount 
         await connection.invoke("PlayerAction", tableId, playerName, action, raiseAmount);
     }
 }
-
 
 window.scrollChatToBottom = function () {
     var chatDiv = document.getElementById('chatScroll');

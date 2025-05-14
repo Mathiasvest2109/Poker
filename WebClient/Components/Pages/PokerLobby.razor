@@ -44,6 +44,7 @@ else
 
 @if (joined && nicknameSubmitted)
 {
+<h3>Joined table: @tableId</h3>
     <div class="mt-4">
         <div class="chat-container">
             <h4>Chat</h4>
@@ -69,23 +70,56 @@ else
     </div>
     <div class="poker-table-container">
         <div class="poker-table">
-            <!-- Shared Cards (Community Cards) -->
             <div class="community-cards">
                 @foreach (var path in findCardPath(communityCards))
                 {
                     <img src="@path" class="card-img" />
                 }
             </div>
-
-            <!-- Your own cards -->
-            <div class="my-cards" style="margin-top: 16px;">
-                <strong>Your Cards:</strong>
-                @foreach (var path in findCardPath(myCards))
+            <div class="players-on-table">
+                @for (int i = 0; i < playersOnTable.Count; i++)
                 {
-                    <img src="@path" class="card-img" />
+                    var player = playersOnTable[i];
+                    <div class="player-seat @($"seat-{i}")">
+                        <div class="player-name">@player</div>
+                        <div class="player-cards player-card">
+                            @if (player == nickname)
+                            {
+                                @foreach (var path in findCardPath(myCards))
+                                {
+                                    <img src="@path" class="card-img" />
+                                }
+                            }
+                            else if (showdownHands.TryGetValue(player, out var showdownCardStrings))
+                            {
+                                // Convert showdown card strings to Card objects and use findCardPath
+                                var showdownCards = showdownCardStrings.Select(cardStr =>
+                                {
+                                    var parts = cardStr.Split('-');
+                                    return new Card { Suit = parts[0], Rank = parts[1] };
+                                }).ToList();
+
+                                foreach (var path in findCardPath(showdownCards))
+                                {
+                                    <img src="@path" class="card-img" />
+                                }
+                            }
+                            else
+                            {
+                                <img src="@CardBackPath" class="card-img" />
+                                <img src="@CardBackPath" class="card-img" />
+                            }
+                        </div>
+                        <div class="player-wallet">
+                            $@(playerWallets.TryGetValue(player, out var wallet) ? wallet : 0)
+                        </div>
+                    </div>
                 }
             </div>
         </div>
+    </div>
+    <div class="table-pot">
+        <strong>Pot:</strong> $@tablePot
     </div>
     <div class="player-actions">
         <button @onclick="@(() => SendPlayerAction("call"))">Call/check</button>
@@ -134,6 +168,11 @@ else
     private double handsWinRation = 0;
     private double handsWon = 0;
     private double handsPlayed = 0;
+    private List<string> playersOnTable = new();
+    private const string CardBackPath = "Sprites/Card Back 1.png";
+    private Dictionary<string, int> playerWallets = new();
+    private int tablePot = 0;
+    private Dictionary<string, List<string>> showdownHands = new();
     private bool nicknameSubmitted = false;
     private bool hasAutoSubmittedNickname = false;
 
@@ -351,6 +390,9 @@ else
     {
         Console.WriteLine($"[DEBUG] Player joined: {playerName}");
         chatLog.Add($"{playerName} joined the table");
+        if (!playersOnTable.Contains(playerName))
+            playersOnTable.Add(playerName);
+        
         StateHasChanged();
         _ = JS.InvokeVoidAsync("scrollChatToBottom");
     }
@@ -499,5 +541,38 @@ else
         return Task.CompletedTask;
     }
 
- 
+    [JSInvokable]
+    public void SetPlayerList(List<string> playerList)
+    {
+        playersOnTable = playerList;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void SetPlayerWallets(Dictionary<string, int> wallets)
+    {
+        playerWallets = wallets;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void SetTablePot(int pot)
+    {
+        tablePot = pot;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void ShowdownHands(Dictionary<string, List<string>> hands)
+    {
+        showdownHands = hands;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void ClearShowdownHands()
+    {
+        showdownHands.Clear();
+        StateHasChanged();
+    }
 }

@@ -50,71 +50,82 @@
 
 .player-seat {
     position: absolute;
-    width: 100px;
-    height: 50px;
+    width: 120px;
+    height: 80px;
     text-align: center;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     color: white;
     font-weight: bold;
+    z-index: 2;
 }
 
-/* Position each player around the table */
+.player-name {
+    margin-bottom: 2px;
+    text-shadow: 1px 1px 2px #222;
+}
+
+.player-wallet {
+    color: #ffd700;
+    font-size: 1rem;
+    text-align: center;
+    margin-top: 2px;
+}
+
+/* Position each player at the 4 edges of the table */
 .seat-0 {
-    top: 10px;
+    top: 20px;
     left: 50%;
     transform: translateX(-50%);
 }
 
 .seat-1 {
     top: 50%;
-    left: 10px;
+    left: 20px;
     transform: translateY(-50%);
 }
 
 .seat-2 {
-    bottom: 10px;
+    bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
 }
 
 .seat-3 {
     top: 50%;
-    right: 10px;
+    right: 20px;
     transform: translateY(-50%);
 }
 
 .player-card {
     background-color: rgba(0, 0, 0, 0.7);
-    padding: 0.5rem;
+    padding: 0.1rem;
     border-radius: 8px;
     display: flex;
-    gap: 4px;
+    gap: 0px;
     justify-content: center;
     align-items: center;
-    gap: 4px;
-    flex-direction: column; /* default: vertical stack */
+    flex-direction: row;
+    margin-top: 4px;
 }
 
-.empty-seat {
-    color: #ccc;
-    font-style: italic;
+.seat-0 .player-card,
+.seat-2 .player-card {
+    flex-direction: row; /* horizontal for top/bottom */
 }
 
-.btn-success {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    font-size: 1rem;
-    font-weight: bold;
-    border-radius: 8px;
-    cursor: pointer;
+.seat-1 .player-card,
+.seat-3 .player-card {
+    flex-direction: row;
+    transform: none;
+    margin-top: 0;
 }
 
-.btn-success:hover {
-    opacity: 0.9;
+.seat-1 .player-cards,
+.seat-3 .player-cards {
+    transform: none;
 }
 
 .community-cards {
@@ -129,29 +140,32 @@
     border-radius: 10px;
 }
 .card-img {
-    width: 60px; /* Smaller card size */
+    width: 60px;
     height: auto;
     transition: transform 0.3s ease;
 }
 
-/* Rotate cards based on seat */
+/* Rotate cards for realism (optional) */
 .seat-0 .card-img {
-    transform: rotate(180deg); /* Top - face down */
+    transform: rotate(180deg); /* Top - upside down */
 }
-
-.seat-1 .card-img {
-    transform: rotate(90deg); /* Left - rotate right */
-}
-
-.seat-2 .card-img {
-    transform: rotate(0deg); /* Bottom - face up */
-}
-
+.seat-1 .card-img,
 .seat-3 .card-img {
-    transform: rotate(-90deg); /* Right - rotate left */
+    transform: rotate(0deg);
 }
-.seat-0 .player-card,
-.seat-2 .player-card {
-    flex-direction: row; /* horizontal for top/bottom */
+.seat-2 .card-img {
+    transform: rotate(0deg);   /* Bottom - normal */
+}
+
+.table-pot {
+    margin: 24px auto 0 auto;
+    text-align: center;
+    font-size: 1.3rem;
+    color: #fff;
+    background: #222;
+    border-radius: 8px;
+    width: 160px;
+    padding: 8px 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 

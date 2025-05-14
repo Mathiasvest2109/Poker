@@ -56,6 +56,7 @@ namespace Server.Services
         public int chips = 1000; // Starting chips
         internal string handtype;
         internal List<Card> besthand;
+        internal bool allin = false;
     }
 
     // Represents a player's hand (two cards)
@@ -112,8 +113,15 @@ namespace Server.Services
         // Starts a new round: deals cards, notifies players, and begins betting
         public async Task PlayRoundAsync()
         {
-            deck = new Deck(); // Reset deck with 52 cards
+            deck = new Deck(); // Reset deck
             players_round = new List<Player>(players);
+            players_fold.Clear();
+            table = new Table();
+            bettingRound = 0;
+            actedThisRound.Clear();
+            currentBet = 0;
+            playerBets = new Dictionary<Player, int>();
+            pot = 0;
             foreach (var p in players_round)
             {
                 p.hand = new Hand
@@ -130,17 +138,11 @@ namespace Server.Services
                 Console.WriteLine($"[DEBUG] {p.playername}: {p.hand.card_1.value} of {p.hand.card_1.suit}, {p.hand.card_2.value} of {p.hand.card_2.suit}");
             }
 
-            await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The hand has started!", DateTime.UtcNow);
+            //await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", "The hand has started!", DateTime.UtcNow);
+            await _hubContext.Clients.Group(_tableId).SendAsync("NewRoundStarted");
 
-            /*foreach (var player in players)
-            {
-                await _hubContext.Clients.Group(_tableId).SendAsync(
-                    "ReceiveTableMessage",
-                    "System",
-                    $"{player.playername} was dealt {player.hand.card_1.value} of {player.hand.card_1.suit} and {player.hand.card_2.value} of {player.hand.card_2.suit}",
-                    DateTime.UtcNow
-                );
-            }*/
+            // Clear community cards for all clients
+            await _hubContext.Clients.Group(_tableId).SendAsync("UpdateCommunityCards", new List<object>());
 
             foreach (var p in players_round)
             {
@@ -177,9 +179,7 @@ namespace Server.Services
                 DateTime.UtcNow
             );
 
-            bettingRound = 0;
-            actedThisRound.Clear();
-            currentPlayerIndex = 0;
+            await BroadcastWalletsAndPotAsync();
             await ProcessBettingAsync(true);
 
         }
@@ -193,19 +193,20 @@ namespace Server.Services
             if (players_round.Count - players_fold.Count == 1)
             {
                 var winner = players_round.First(p => !players_fold.Contains(p));
-                await _hubContext.Clients.Group(_tableId).SendAsync("ReceiveTableMessage", "System", $"{winner.playername} wins the hand!", DateTime.UtcNow);
+                bettingRound = 4;
+                await NextBettingRound();
                 return;
             }
 
             bool bets_equal = true;
-            int bet_check = players_round[0].chips;
-            foreach(Player player in players_round)
+            int? bet_check = null;
+            foreach (var player in players_round)
             {
-                if (bet_check != player.chips) 
-                {
+                if (players_fold.Contains(player)) continue;
+                if (bet_check == null)
+                    bet_check = playerBets[player];
+                else if (playerBets[player] != bet_check && !player.allin)
                     bets_equal = false;
-                }
-                bet_check = player.chips;
             }
 
             // End betting round if all non-folded players have acted and while all bet amounts are equal
@@ -215,6 +216,7 @@ namespace Server.Services
                 return;
             }
 
+            /*
             // Find the next player who hasn't folded and hasn't acted
             Player p = null;
             int startIdx = currentPlayerIndex;
@@ -233,6 +235,7 @@ namespace Server.Services
             int toCall = currentBet - playerBets[p];
             await _hubContext.Clients.Client(p.ConnectionId)
                 .SendAsync("PromptPlayerAction", p.playername, toCall, currentBet);
+            */
         }
 
         // Handles a player's action and advances the betting round
@@ -251,10 +254,14 @@ namespace Server.Services
                 DateTime.UtcNow
                 );
             }
-            else if (action == "call")
+            else if (action == "call") // All-in protection
             {
                 int toCall = currentBet - playerBets[p];
-                if (toCall > p.chips) toCall = p.chips; // All-in protection
+                if (toCall > p.chips)
+                {
+                    p.allin = true;
+                    toCall = p.chips; // All-in protection
+                }
                 p.chips -= toCall;
                 pot += toCall;
                 playerBets[p] += toCall;
@@ -264,12 +271,17 @@ namespace Server.Services
                 $"Player {p.playername} called/checked, the pot is  now {pot}.",
                 DateTime.UtcNow
                 );
+                await BroadcastWalletsAndPotAsync();
             }
             else if (action == "raise")
             {
                 int toCall = currentBet - playerBets[p];
                 int totalBet = toCall + raiseAmount;
-                if (totalBet > p.chips) totalBet = p.chips; // All-in protection
+                if (totalBet > p.chips) // All-in protection
+                {
+                    p.allin = true;
+                    totalBet = p.chips;
+                }
                 p.chips -= totalBet;
                 pot += totalBet;
                 playerBets[p] += totalBet;
@@ -280,6 +292,7 @@ namespace Server.Services
                 $"Player {p.playername} raised {raiseAmount}, the pot is  now {pot}.",
                 DateTime.UtcNow
                 );
+                await BroadcastWalletsAndPotAsync();
             }
 
             actedThisRound.Add(playerName);
@@ -347,6 +360,8 @@ namespace Server.Services
                     );
                 }
 
+                await BroadcastShowdownAsync();
+
                 if (contenders.Count == 1)
                 {
                     // Only one player left (should be handled earlier, but just in case)
@@ -362,7 +377,7 @@ namespace Server.Services
                     {
                         // Send only to the specific player
                         if (p.Equals(winner))
-                                await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
+                            await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                         else
                             await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
 
@@ -388,7 +403,6 @@ namespace Server.Services
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                             else
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
-
                         }
                     }
                     else
@@ -412,7 +426,6 @@ namespace Server.Services
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                             else
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
-
                         }
                     }
                 }
@@ -428,7 +441,6 @@ namespace Server.Services
                     {
                         // Send only to the specific player
                         await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
-
                     }
                 }
 
@@ -441,8 +453,6 @@ namespace Server.Services
                             DateTime.UtcNow
                         );
                 }
-                // Reset pot for next hand
-                pot = 0;
 
                 // Check if a player has won the game, if so wait for the host to start game again.
                 int p_with_chips = 0;
@@ -459,6 +469,7 @@ namespace Server.Services
                 }
 
                 await PlayRoundAsync();
+                //await DealNewHandAsync();
             }
         }
         private async Task EndGame(Player winner)
@@ -477,13 +488,10 @@ namespace Server.Services
                     await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateGameWinRatio", true);
                 else
                     await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateGameWinRatio", false);
-
             }
 
             terminateCallback?.Invoke();
 
-
-            //Task.Delay(2000);
         }
 
         private List<Player> EvaluateBestHand(List<Player> contenders)
@@ -528,6 +536,27 @@ namespace Server.Services
             Console.WriteLine("[DEBUG] Sending community cards: " + string.Join(", ", cards.Select(c => $"{c}")));
 
             await _hubContext.Clients.Group(_tableId).SendAsync("UpdateCommunityCards", cards);
+        }
+
+        private async Task BroadcastWalletsAndPotAsync()
+        {
+            var wallets = players.ToDictionary(p => p.playername, p => p.chips);
+            await _hubContext.Clients.Group(_tableId).SendAsync("UpdateWallets", wallets);
+            await _hubContext.Clients.Group(_tableId).SendAsync("UpdatePot", pot);
+        }
+
+        private async Task BroadcastShowdownAsync()
+        {
+            // Build a dictionary: player name -> list of cards (e.g., ["Hearts-2", "Spades-K"])
+            var hands = players.ToDictionary(
+                p => p.playername,
+                p => new List<string>
+                {
+                    $"{p.hand.card_1.suit}-{p.hand.card_1.value}",
+                    $"{p.hand.card_2.suit}-{p.hand.card_2.value}"
+                }
+            );
+            await _hubContext.Clients.Group(_tableId).SendAsync("ShowdownHands", hands);
         }
     }
 
