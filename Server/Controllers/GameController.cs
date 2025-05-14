@@ -361,7 +361,7 @@ namespace Server.Services
                     foreach (var p in players)
                     {
                         // Send only to the specific player
-                        if p.Equals(winner)
+                        if (p.Equals(winner))
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                         else
                             await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
@@ -384,7 +384,7 @@ namespace Server.Services
                         foreach (var p in players)
                         {
                             // Send only to the specific player
-                            if p.Equals(winners[0])
+                            if (p.Equals(winners[0]))
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                             else
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
@@ -408,7 +408,7 @@ namespace Server.Services
                         foreach (var p in players)
                         {
                             // Send only to the specific player
-                            if winners.Contains(p)
+                            if (winners.Contains(p))
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                             else
                                 await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
@@ -473,7 +473,7 @@ namespace Server.Services
             foreach (var p in players)
             {
                 // Send only to the specific player
-                if p.Equals(winner)
+                if (p.Equals(winner))
                     await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateGameWinRatio", true);
                 else
                     await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateGameWinRatio", false);
