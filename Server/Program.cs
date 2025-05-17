@@ -1,5 +1,7 @@
 using Server.Hubs;
 using Server.Services;
+using Microsoft.EntityFrameworkCore;
+using Poker.Server.DAL;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +11,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddSignalR(); //added for SignalR support
 builder.Services.AddSingleton<TableManager>();
 builder.Services.AddControllers();
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>

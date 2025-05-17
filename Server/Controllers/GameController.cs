@@ -381,6 +381,7 @@ namespace Server.Services
                             await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", true);
                         else
                             await _hubContext.Clients.Client(p.ConnectionId).SendAsync("UpdateHandWinRatio", false);
+
                     }
                 }
                 else if (contenders.Count > 1)

@@ -5,7 +5,7 @@
 @inject NavigationManager Nav
 @using Microsoft.AspNetCore.Components.Web;
 @using System.Text.Json.Serialization;
-
+@inject UserState UserState
 <h1>Poker Lobby</h1>
 
 @if (!string.IsNullOrEmpty(warningMessage))
@@ -29,6 +29,8 @@
 }
 else
 {
+    @if (joined && !nicknameSubmitted && !hasAutoSubmittedNickname)
+{
     <div>
         <h3>Joined table: @tableId</h3>
 
@@ -38,8 +40,11 @@ else
     </div>
 }
 
-@if (!string.IsNullOrEmpty(nickname))
+}
+
+@if (joined && nicknameSubmitted)
 {
+<h3>Joined table: @tableId</h3>
     <div class="mt-4">
         <div class="chat-container">
             <h4>Chat</h4>
@@ -168,6 +173,8 @@ else
     private Dictionary<string, int> playerWallets = new();
     private int tablePot = 0;
     private Dictionary<string, List<string>> showdownHands = new();
+    private bool nicknameSubmitted = false;
+    private bool hasAutoSubmittedNickname = false;
 
     // For JS interop instance reference
     private static PokerLobby? _instance;
@@ -290,6 +297,14 @@ else
             status = $"Created table: {tableId}";
             joined = true;
             isHost = true; // Set host flag
+            if (UserState.IsLoggedIn && !nicknameSubmitted && !hasAutoSubmittedNickname)
+            {
+                nickname = UserState.DisplayName ?? UserState.Username ?? "Player";
+                hasAutoSubmittedNickname = true;
+                await SubmitNickname();
+            } 
+
+                StateHasChanged();
         }
         catch
         {
@@ -307,6 +322,14 @@ else
                 status = $"Joined table: {tableId}";
                 joined = true;
                 isHost = false; // Not the host
+                if (UserState.IsLoggedIn && !nicknameSubmitted && !hasAutoSubmittedNickname)
+                {
+                    nickname = UserState.DisplayName ?? UserState.Username ?? "Player";
+                    hasAutoSubmittedNickname = true;
+                    await SubmitNickname();
+                }
+                StateHasChanged();
+
             }
             else
             {
@@ -321,8 +344,9 @@ else
 
     private async Task SubmitNickname()
     {
+        if (nicknameSubmitted || string.IsNullOrWhiteSpace(nickname)) return;
         status = $"Nickname set to: {nickname}";
-
+      
         jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
 
         await jsModule.InvokeVoidAsync(
@@ -333,6 +357,10 @@ else
             nameof(ReceiveMessage),
             nameof(PlayerJoined)
         );
+
+          nicknameSubmitted = true;
+
+
     }
 
     [JSInvokable]
@@ -424,29 +452,21 @@ else
     {
         public string TableId { get; set; }
     }
-
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _instance = this;
-        /*communityCards = new List<Card>
-        {
-            new Card("Clubs", "10"),
-            new Card("Hearts", "J"), // Use "J" instead of "11"
-            new Card("Spades", "4")
-        };
 
-        playerCards["Alice"] = new List<Card>
+        if (UserState.IsLoggedIn)
         {
-            new Card("Diamonds", "9"),
-            new Card("Clubs", "2")
-        };
+            nickname = UserState.DisplayName ?? UserState.Username ?? "Player";
 
-        playerCards["Bob"] = new List<Card>
-        {
-            new Card("Spades", "K"), // "K" instead of "13"
-            new Card("Hearts", "3")
-        };*/
+            if (joined && !nicknameSubmitted && !string.IsNullOrWhiteSpace(nickname))
+            {
+                await SubmitNickname();
+            }
+        }
     }
+
 
     private List<(string Sender, string Message, DateTime Timestamp)> chatMessages = new();
 
