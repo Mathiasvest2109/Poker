@@ -361,7 +361,7 @@ namespace Server.Services
                 }
 
                 await BroadcastShowdownAsync();
-                await Task.Delay(2000).ConfigureAwait(true);
+                await Task.Delay(3000).ConfigureAwait(true);
 
                 if (contenders.Count == 1)
                 {
@@ -468,10 +468,10 @@ namespace Server.Services
                 {
                     await EndGame(players.Find(p => p.chips > 0));
                 }
-
-
-                await PlayRoundAsync();
-                //await DealNewHandAsync();
+                else
+                {
+                    await PlayRoundAsync();
+                }
             }
         }
         private async Task EndGame(Player winner)

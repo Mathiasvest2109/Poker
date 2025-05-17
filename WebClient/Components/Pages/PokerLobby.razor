@@ -30,21 +30,21 @@
 else
 {
     @if (joined && !nicknameSubmitted && !hasAutoSubmittedNickname)
-{
-    <div>
-        <h3>Joined table: @tableId</h3>
+    {
+        <div>
+            <h3>Joined table: @tableId</h3>
 
-        <label>Your nickname:</label>
-        <input @bind="nickname" placeholder="Enter nickname..." />
-        <button @onclick="SubmitNickname">Submit</button>
-    </div>
-}
+            <label>Your nickname:</label>
+            <input @bind="nickname" placeholder="Enter nickname..." />
+            <button @onclick="SubmitNickname">Submit</button>
+        </div>
+    }
 
 }
 
 @if (joined && nicknameSubmitted)
 {
-<h3>Joined table: @tableId</h3>
+    <h3>Joined table: @tableId</h3>
     <div class="mt-4">
         <div class="chat-container">
             <h4>Chat</h4>
@@ -132,6 +132,8 @@ else
         <pre>
             myCards: @((myCards == null ? "null" : string.Join(", ", myCards.Select(c => $"{c.Suit}-{c.Rank}"))))
             communityCards: @((communityCards == null ? "null" : string.Join(", ", communityCards.Select(c => $"{c.Suit}-{c.Rank}"))))
+            HandsStats: Played=@(handsPlayed) Won=@(handsWon) precentage=@($"{handsWinRatio:F3}%")
+            GameStats: Played=@(gamesPlayed) Won=@(gamesWon) precentage=@($"{gamesWinRatio:F3}%")
         </pre>
     </div>
     <div class="my-cards" style="margin-top: 16px;">
@@ -162,10 +164,10 @@ else
     private List<Card> communityCards = new(); // Shared cards
     private List<Card> myCards = new();
     private Dictionary<string, List<Card>> playerCards = new(); // Hole cards per player
-    private double gamesWinRation = 0;
+    private double gamesWinRatio = 0;
     private double gamesWon = 0;
     private double gamesPlayed = 0;
-    private double handsWinRation = 0;
+    private double handsWinRatio = 0;
     private double handsWon = 0;
     private double handsPlayed = 0;
     private List<string> playersOnTable = new();
@@ -304,7 +306,7 @@ else
                 await SubmitNickname();
             } 
 
-                StateHasChanged();
+            StateHasChanged();
         }
         catch
         {
@@ -346,7 +348,7 @@ else
     {
         if (nicknameSubmitted || string.IsNullOrWhiteSpace(nickname)) return;
         status = $"Nickname set to: {nickname}";
-      
+
         jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/pokerLobby.js");
 
         await jsModule.InvokeVoidAsync(
@@ -358,7 +360,7 @@ else
             nameof(PlayerJoined)
         );
 
-          nicknameSubmitted = true;
+        nicknameSubmitted = true;
 
 
     }
@@ -392,7 +394,7 @@ else
         chatLog.Add($"{playerName} joined the table");
         if (!playersOnTable.Contains(playerName))
             playersOnTable.Add(playerName);
-        
+
         StateHasChanged();
         _ = JS.InvokeVoidAsync("scrollChatToBottom");
     }
@@ -521,11 +523,12 @@ else
     public Task SetGameWinRatio(bool Won)
     {
         Console.WriteLine($"[DEBUG] SetGaneWinRatio received Winner?: {Won}");
+        gamesPlayed++;
         if (Won)
         {
             gamesWon++;
         }
-        gamesWinRation = gamesWon / gamesPlayed;
+        gamesWinRatio = gamesWon / gamesPlayed * 100;
         return Task.CompletedTask;
     }
 
@@ -533,11 +536,12 @@ else
     public Task SetHandWinRatio(bool Won)
     {
         Console.WriteLine($"[DEBUG] SetHandWinRatio received Winner?: {Won}");
+        handsPlayed++;
         if (Won)
         {
             handsWon++;
         }
-        handsWinRation = handsWon / handsPlayed;
+        handsWinRatio = handsWon / handsPlayed * 100;
         return Task.CompletedTask;
     }
 
